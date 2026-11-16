@@ -30,7 +30,7 @@ test('API-key login, network creation, peer editing, and platform join commands'
       await route.fulfill({ status: 201 })
       return
     }
-    if (url.pathname === '/api/v1/networks/office/nodes/dashboard/peers') {
+    if (url.pathname === '/api/v1/networks/office/peers') {
       await route.fulfill({ json: { version: 1, peers: { [registeredPeer.node_id]: registeredPeer } } })
       return
     }

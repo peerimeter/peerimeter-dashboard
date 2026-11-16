@@ -32,7 +32,21 @@ describe('ServiceAPI', () => {
     const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ peers: {} }), { status: 200 }))
     vi.stubGlobal('fetch', fetcher)
     await new ServiceAPI('https://service.example.com', 'key').peers('mesh one')
-    expect(fetcher.mock.calls[0][0]).toBe('https://service.example.com/api/v1/networks/mesh%20one/nodes/dashboard/peers')
+    expect(fetcher.mock.calls[0][0]).toBe('https://service.example.com/api/v1/networks/mesh%20one/peers')
+  })
+
+  it('rejects remote HTTP service URLs before sending credentials', async () => {
+    const fetcher = vi.fn()
+    vi.stubGlobal('fetch', fetcher)
+    await expect(new ServiceAPI('http://service.example.com', 'secret-key').verify()).rejects.toThrow('must use HTTPS')
+    expect(fetcher).not.toHaveBeenCalled()
+  })
+
+  it.each(['http://localhost:8080', 'http://127.0.0.1:8080', 'http://[::1]:8080'])('allows HTTP loopback URL %s', async (url) => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ networks: {} }), { status: 200 }))
+    vi.stubGlobal('fetch', fetcher)
+    await new ServiceAPI(url, 'secret-key').verify()
+    expect(fetcher).toHaveBeenCalledOnce()
   })
 
   it('requests a join bundle for the selected network', async () => {

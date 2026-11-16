@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Activity, ArrowUpRight, Check, ChevronRight, CircleHelp, Copy, Cpu, Globe2, KeyRound, LogOut, Plus, RefreshCw, Search, Shield, Users, X } from 'lucide-react'
 import { defaultServiceURL, joinCommands, ServiceAPI } from '../api'
 import type { Network, Peer } from '../api'
@@ -27,30 +27,48 @@ export function App() {
   const [notice, setNotice] = useState('')
   const [modal, setModal] = useState<'network' | 'peer' | 'join' | null>(null)
   const [peerConfig, setPeerConfig] = useState<Record<string, unknown>>({})
+  const [peerConfigLoaded, setPeerConfigLoaded] = useState(false)
   const [joinToken, setJoinToken] = useState('')
   const [copied, setCopied] = useState('')
+  const peerLoadID = useRef(0)
+  const peerConfigLoadID = useRef(0)
+  const joinLoadID = useRef(0)
 
   const selected = networks.find((network) => network.id === selectedID) ?? null
   const filteredPeers = peers.filter((peer) => `${peerNames[peer.node_id] ?? ''} ${peer.node_id} ${peer.tunnel_address ?? ''} ${peer.public_key}`.toLowerCase().includes(search.toLowerCase()))
   const join = useMemo(() => joinToken && selected ? joinCommands() : null, [joinToken, selected])
 
+  async function loadPeers(client: ServiceAPI, networkID: string) {
+    const requestID = ++peerLoadID.current
+    setPeers([]); setPeerNames({})
+    if (!networkID) return
+    try {
+      const nextPeers = await client.peers(networkID)
+      if (requestID !== peerLoadID.current) return
+      setPeers(nextPeers)
+      const names = await Promise.all(nextPeers.map(async (peer) => {
+        try {
+          const config = await client.peerConfig(networkID, peer.node_id)
+          return [peer.node_id, String(config?.name || peer.node_id)] as const
+        } catch { return [peer.node_id, peer.node_id] as const }
+      }))
+      if (requestID === peerLoadID.current) setPeerNames(Object.fromEntries(names))
+    } catch (cause) {
+      if (requestID === peerLoadID.current) setError(cause instanceof Error ? cause.message : 'Could not load peers')
+    }
+  }
+
   async function refresh(client = api, networkID = selectedID) {
     if (!client) return
+    peerLoadID.current++
+    setPeers([]); setPeerNames({})
     setBusy(true); setError('')
     try {
       const items = await client.networks()
       setNetworks(items)
       const nextID = items.some((network) => network.id === networkID) ? networkID : items[0]?.id ?? ''
       setSelectedID(nextID)
-      const nextPeers = nextID ? await client.peers(nextID) : []
-      setPeers(nextPeers)
-      const names = await Promise.all(nextPeers.map(async (peer) => {
-        try {
-          const config = await client.peerConfig(nextID, peer.node_id)
-          return [peer.node_id, String(config?.name || peer.node_id)] as const
-        } catch { return [peer.node_id, peer.node_id] as const }
-      }))
-      setPeerNames(Object.fromEntries(names))
+      await loadPeers(client, nextID)
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not load service data') }
     finally { setBusy(false) }
   }
@@ -78,30 +96,22 @@ export function App() {
   }
 
   async function selectNetwork(id: string) {
-    setSelectedID(id); setActive(null); setJoinToken(''); setError('')
-    if (!api || !id) { setPeers([]); return }
+    setSelectedID(id); setActive(null); setJoinToken(''); setError(''); joinLoadID.current++
+    if (!api || !id) { setPeers([]); setPeerNames({}); return }
     setBusy(true)
-    try {
-      const nextPeers = await api.peers(id)
-      setPeers(nextPeers)
-      const names = await Promise.all(nextPeers.map(async (peer) => {
-        try {
-          const config = await api.peerConfig(id, peer.node_id)
-          return [peer.node_id, String(config?.name || peer.node_id)] as const
-        } catch { return [peer.node_id, peer.node_id] as const }
-      }))
-      setPeerNames(Object.fromEntries(names))
-    }
-    catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not load peers') }
+    try { await loadPeers(api, id) }
     finally { setBusy(false) }
   }
 
   async function openPeer(peer: Peer) {
-    setActive(peer); setError(''); setModal('peer')
+    const requestID = ++peerConfigLoadID.current
+    const networkID = selectedID
+    setActive(peer); setPeerConfig({}); setPeerConfigLoaded(false); setError(''); setModal('peer')
     try {
-      const config = await api?.peerConfig(selectedID, peer.node_id)
-      setPeerConfig(config ?? { version: 1, name: peer.node_id, notes: '' })
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not load peer details') }
+      const config = await api?.peerConfig(networkID, peer.node_id)
+      if (requestID !== peerConfigLoadID.current) return
+      setPeerConfig(config ?? { version: 1, name: peer.node_id, notes: '' }); setPeerConfigLoaded(true)
+    } catch (cause) { if (requestID === peerConfigLoadID.current) setError(cause instanceof Error ? cause.message : 'Could not load peer details') }
   }
 
   async function createNetwork(event: React.FormEvent<HTMLFormElement>) {
@@ -131,9 +141,11 @@ export function App() {
 
   async function showJoin() {
     if (!api) return
+    const requestID = ++joinLoadID.current
+    const networkID = selectedID
     setError(''); setJoinToken(''); setModal('join')
-    try { setJoinToken(await api.joinToken(selectedID)) }
-    catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not create join bundle') }
+    try { const token = await api.joinToken(networkID); if (requestID === joinLoadID.current) setJoinToken(token) }
+    catch (cause) { if (requestID === joinLoadID.current) setError(cause instanceof Error ? cause.message : 'Could not create join bundle') }
   }
 
   async function copy(text: string, label: string) {
@@ -142,7 +154,8 @@ export function App() {
   }
 
   function signOut() {
-    sessionStorage.removeItem('peerimeter.session'); setAPI(null); setNetworks([]); setPeers([]); setPeerNames({}); setSelectedID(''); setActive(null); setJoinToken('')
+    peerLoadID.current++; peerConfigLoadID.current++; joinLoadID.current++
+    sessionStorage.removeItem('peerimeter.session'); setAPI(null); setNetworks([]); setPeers([]); setPeerNames({}); setSelectedID(''); setActive(null); setJoinToken(''); setPeerConfig({}); setPeerConfigLoaded(false)
     setCredentials({ url: defaultServiceURL(configuredServiceURL, location.origin), key: '' })
   }
 
@@ -189,11 +202,11 @@ export function App() {
       </>}
     </main>
 
-    {modal && <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setModal(null) }}><section className={`modal ${modal === 'join' ? 'join-modal' : ''}`} role="dialog" aria-modal="true">
-      <header className="modal-heading"><div><span className="eyebrow">{modal === 'network' ? 'NETWORK SETUP' : modal === 'peer' ? 'PEER DETAILS' : 'JOIN NETWORK'}</span><h2>{modal === 'network' ? 'Create a network' : modal === 'peer' ? (String(peerConfig.name || active?.node_id || 'Peer')) : 'Invite a peer'}</h2></div><button className="icon-button" aria-label="Close" onClick={() => setModal(null)}><X size={17} /></button></header>
+      {modal && <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) { if (modal === 'join') joinLoadID.current++; if (modal === 'peer') peerConfigLoadID.current++; setModal(null) } }}><section className={`modal ${modal === 'join' ? 'join-modal' : ''}`} role="dialog" aria-modal="true">
+      <header className="modal-heading"><div><span className="eyebrow">{modal === 'network' ? 'NETWORK SETUP' : modal === 'peer' ? 'PEER DETAILS' : 'JOIN NETWORK'}</span><h2>{modal === 'network' ? 'Create a network' : modal === 'peer' ? (String(peerConfig.name || active?.node_id || 'Peer')) : 'Invite a peer'}</h2></div><button className="icon-button" aria-label="Close" onClick={() => { if (modal === 'join') joinLoadID.current++; if (modal === 'peer') peerConfigLoadID.current++; setModal(null) }}><X size={17} /></button></header>
       {modal === 'network' && <form className="form-stack modal-body" onSubmit={createNetwork}><p className="modal-intro">Choose a name and a private address range for your WireGuard mesh.</p><label>Network name<input name="name" required maxLength={128} placeholder="Engineering mesh" onChange={(e) => { const id = document.querySelector<HTMLInputElement>('[name=id]'); if (id && !id.dataset.edited) id.value = slug(e.target.value) }} /></label><label>Network ID<input name="id" required maxLength={128} pattern="[A-Za-z0-9_.-]+" placeholder="engineering-mesh" onInput={(e) => { e.currentTarget.dataset.edited = 'true' }} /></label><label>Private IPv4 CIDR<input name="cidr" required defaultValue="10.90.0.0/24" placeholder="10.90.0.0/24" /><small>Canonical private IPv4 range from /8 through /30. It must not overlap another network.</small></label><ModalError error={error} /><div className="modal-actions"><button type="button" className="button secondary" onClick={() => setModal(null)}>Cancel</button><button className="button primary" disabled={busy}>{busy ? 'Creating…' : 'Create network'}</button></div></form>}
-      {modal === 'peer' && active && <><form className="form-stack modal-body" onSubmit={savePeer}><div className="peer-detail-card"><div className="peer-avatar large"><Cpu size={19} /></div><div><b>{active.node_id}</b><small>{active.tunnel_address || 'Address pending'} · {active.public_endpoint || 'Endpoint not reported'}</small></div></div><label>Display name<input name="name" maxLength={128} defaultValue={String(peerConfig.name ?? active.node_id)} placeholder="Build server" /></label><label>Notes<textarea name="notes" rows={3} maxLength={1000} defaultValue={String(peerConfig.notes ?? '')} placeholder="Optional notes about this peer" /></label><div className="peer-facts"><span>Public key <code>{shortKey(active.public_key)}</code></span><span>Listen port <code>{active.listen_port ?? '—'}</code></span></div><p className="readonly-note">Peer records are created by agents. The service currently does not support revoking a registered peer.</p><ModalError error={error} /><div className="modal-actions"><button type="button" className="button secondary" onClick={() => setModal(null)}>Close</button><button className="button primary" disabled={busy}>{busy ? 'Saving…' : 'Save details'}</button></div></form></>}
-      {modal === 'join' && <div className="modal-body join-body"><p className="modal-intro">Install the Peerimeter agent and pass the network-scoped token for <b>{selected?.name}</b> through a hidden prompt.</p>{!join ? <div className="loading-line"><span className="live-dot" />Preparing your join token…</div> : <><div className="join-token-row"><span><KeyRound size={14} /><span><b>Join token</b><small>Copy it separately, then paste at the hidden prompt</small></span></span><button className="copy-button" onClick={() => void copy(joinToken, 'token')}>{copied === 'token' ? <Check size={14} /> : <Copy size={14} />}{copied === 'token' ? 'Copied' : 'Copy token'}</button></div><div className="platform-block"><div className="platform-title"><div><span className="platform-icon">$</span><span><b>Linux & macOS</b><small>Run in Terminal</small></span></div><button className="copy-button" onClick={() => void copy(join.unix, 'unix')}>{copied === 'unix' ? <Check size={14} /> : <Copy size={14} />}{copied === 'unix' ? 'Copied' : 'Copy'}</button></div><pre>{join.unix}</pre></div><div className="platform-block"><div className="platform-title"><div><span className="platform-icon windows">PS</span><span><b>Windows</b><small>Run PowerShell as Administrator</small></span></div><button className="copy-button" onClick={() => void copy(join.powershell, 'windows')}>{copied === 'windows' ? <Check size={14} /> : <Copy size={14} />}{copied === 'windows' ? 'Copied' : 'Copy'}</button></div><pre>{join.powershell}</pre></div><div className="token-note"><Shield size={15} /><span>This network-scoped token still uses the service-wide API key, which grants access to every network. Keep it private.</span></div></>}<ModalError error={error} /><div className="modal-actions"><button className="button secondary" onClick={() => setModal(null)}>Done</button></div></div>}
+      {modal === 'peer' && active && <><form className="form-stack modal-body" onSubmit={savePeer}><div className="peer-detail-card"><div className="peer-avatar large"><Cpu size={19} /></div><div><b>{active.node_id}</b><small>{active.tunnel_address || 'Address pending'} · {active.public_endpoint || 'Endpoint not reported'}</small></div></div><label>Display name<input name="name" maxLength={128} defaultValue={String(peerConfig.name ?? active.node_id)} placeholder="Build server" /></label><label>Notes<textarea name="notes" rows={3} maxLength={1000} defaultValue={String(peerConfig.notes ?? '')} placeholder="Optional notes about this peer" /></label><div className="peer-facts"><span>Public key <code>{shortKey(active.public_key)}</code></span><span>Listen port <code>{active.listen_port ?? '—'}</code></span></div><p className="readonly-note">Peer records are created by agents. The service currently does not support revoking a registered peer.</p><ModalError error={error} /><div className="modal-actions"><button type="button" className="button secondary" onClick={() => { peerConfigLoadID.current++; setModal(null) }}>Close</button><button className="button primary" disabled={busy || !peerConfigLoaded}>{busy ? 'Saving…' : 'Save details'}</button></div></form></>}
+      {modal === 'join' && <div className="modal-body join-body"><p className="modal-intro">Install the Peerimeter agent and pass the network-scoped token for <b>{selected?.name}</b> through a hidden prompt.</p>{!join && !error ? <div className="loading-line"><span className="live-dot" />Preparing your join token…</div> : join && <><div className="join-token-row"><span><KeyRound size={14} /><span><b>Join token</b><small>Copy it separately, then paste at the hidden prompt</small></span></span><button className="copy-button" onClick={() => void copy(joinToken, 'token')}>{copied === 'token' ? <Check size={14} /> : <Copy size={14} />}{copied === 'token' ? 'Copied' : 'Copy token'}</button></div><div className="platform-block"><div className="platform-title"><div><span className="platform-icon">$</span><span><b>Linux & macOS</b><small>Run in Terminal</small></span></div><button className="copy-button" onClick={() => void copy(join.unix, 'unix')}>{copied === 'unix' ? <Check size={14} /> : <Copy size={14} />}{copied === 'unix' ? 'Copied' : 'Copy'}</button></div><pre>{join.unix}</pre></div><div className="platform-block"><div className="platform-title"><div><span className="platform-icon windows">PS</span><span><b>Windows</b><small>Run PowerShell as Administrator</small></span></div><button className="copy-button" onClick={() => void copy(join.powershell, 'windows')}>{copied === 'windows' ? <Check size={14} /> : <Copy size={14} />}{copied === 'windows' ? 'Copied' : 'Copy'}</button></div><pre>{join.powershell}</pre></div><div className="token-note"><Shield size={15} /><span>This network-scoped token still uses the service-wide API key, which grants access to every network. Keep it private.</span></div></>}<ModalError error={error} /><div className="modal-actions"><button className="button secondary" onClick={() => { joinLoadID.current++; setModal(null) }}>Done</button></div></div>}
     </section></div>}
   </div>
 }

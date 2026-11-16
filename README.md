@@ -58,7 +58,9 @@ npm audit --audit-level=moderate
 
 For a production build, run `npm run build`; the static site is emitted to
 `dist/`. Browser tests use Playwright and mock the service API so they do not
-need a running Peerimeter deployment. `npm run test:ui` opens Playwright's
+need a running Peerimeter deployment. Install the browser and system
+dependencies with `npx playwright install --with-deps chromium` before running
+`npm run test:e2e`. `npm run test:ui` opens Playwright's
 interactive test runner. Configure your web server to serve the dashboard files and reverse
 proxy `/api/` to the Peerimeter Service on the same host and HTTPS origin. The
 dashboard defaults its service URL to the current origin; on sign-in, provide
