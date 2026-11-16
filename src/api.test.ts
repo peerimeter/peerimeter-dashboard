@@ -1,0 +1,64 @@
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { defaultServiceURL, joinCommands, ServiceAPI } from './api'
+
+afterEach(() => vi.unstubAllGlobals())
+
+describe('ServiceAPI', () => {
+  it('normalizes the service URL and sends the shared bearer key', async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ networks: {} }), { status: 200 }))
+    vi.stubGlobal('fetch', fetcher)
+    const api = new ServiceAPI('https://service.example.com///', 'secret-key')
+    await api.networks()
+    expect(fetcher).toHaveBeenCalledWith('https://service.example.com/api/v1/networks', expect.objectContaining({
+      headers: { Authorization: 'Bearer secret-key' },
+    }))
+  })
+
+  it('sorts networks by display name', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ networks: {
+      z: { version: 1, id: 'z', name: 'Zulu', cidr: '10.2.0.0/24' },
+      a: { version: 1, id: 'a', name: 'Alpha', cidr: '10.1.0.0/24' },
+    } }), { status: 200 })))
+    const networks = await new ServiceAPI('https://service.example.com', 'key').networks()
+    expect(networks.map((network) => network.name)).toEqual(['Alpha', 'Zulu'])
+  })
+
+  it('surfaces structured service errors', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: 'network CIDR overlaps an existing network' }), { status: 409 })))
+    await expect(new ServiceAPI('https://service.example.com', 'key').verify()).rejects.toThrow('network CIDR overlaps an existing network')
+  })
+
+  it('uses URL encoded network and peer identifiers', async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ peers: {} }), { status: 200 }))
+    vi.stubGlobal('fetch', fetcher)
+    await new ServiceAPI('https://service.example.com', 'key').peers('mesh one')
+    expect(fetcher.mock.calls[0][0]).toBe('https://service.example.com/api/v1/networks/mesh%20one/nodes/dashboard/peers')
+  })
+
+  it('requests a join bundle for the selected network', async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ token: 'bundle' }), { status: 200 }))
+    vi.stubGlobal('fetch', fetcher)
+    await new ServiceAPI('https://service.example.com', 'key').joinToken('mesh one')
+    expect(fetcher.mock.calls[0][0]).toBe('https://service.example.com/api/v1/join-bundle?network_id=mesh%20one')
+  })
+})
+
+describe('defaultServiceURL', () => {
+  it('uses the configured default and falls back to the app origin', () => {
+    expect(defaultServiceURL(' https://api.example.test/ ', 'https://dashboard.example.test')).toBe('https://api.example.test/')
+    expect(defaultServiceURL(undefined, 'https://dashboard.example.test')).toBe('https://dashboard.example.test')
+    expect(defaultServiceURL('  ', 'https://dashboard.example.test')).toBe('https://dashboard.example.test')
+  })
+})
+
+describe('joinCommands', () => {
+  it('pipes the network-scoped token from a hidden prompt on Unix and Windows', () => {
+    const commands = joinCommands()
+    expect(commands.unix).toContain('read -rsp "Paste the join token: "')
+    expect(commands.unix).toContain('sudo peerimeter-agent join')
+    expect(commands.unix).not.toContain('--network-id')
+    expect(commands.powershell).toContain("Read-Host 'Paste the join token' -AsSecureString")
+    expect(commands.powershell).toContain('Peerimeter\\peerimeter-agent.exe" join')
+    expect(commands.powershell).not.toContain('--network-id')
+  })
+})
