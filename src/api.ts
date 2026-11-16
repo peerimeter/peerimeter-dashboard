@@ -23,6 +23,11 @@ export class ServiceAPI {
   }
 
   async request<T>(path: string, init: RequestInit = {}): Promise<T> {
+    const target = new URL(this.baseURL)
+    const localHosts = new Set(['localhost', '127.0.0.1', '[::1]', '::1'])
+    if (target.protocol !== 'https:' && !(target.protocol === 'http:' && localHosts.has(target.hostname))) {
+      throw new Error('Service URL must use HTTPS unless it points to a loopback address')
+    }
     const response = await fetch(`${this.baseURL}${path}`, {
       ...init,
       headers: {
@@ -53,7 +58,7 @@ export class ServiceAPI {
   }
   async peers(networkID: string): Promise<Peer[]> {
     const result = await this.request<{ peers: Record<string, Peer> }>(
-      `/api/v1/networks/${encodeURIComponent(networkID)}/nodes/dashboard/peers`,
+      `/api/v1/networks/${encodeURIComponent(networkID)}/peers`,
     )
     return Object.values(result.peers ?? {}).sort((a, b) => a.node_id.localeCompare(b.node_id))
   }
