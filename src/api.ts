@@ -40,16 +40,18 @@ export function rememberServiceURL(url: string, storage?: Pick<Storage, 'getItem
 export class ServiceAPI {
   readonly baseURL: string
   readonly key: string
+  readonly allowInsecureHTTP: boolean
 
-  constructor(baseURL: string, key: string) {
+  constructor(baseURL: string, key: string, allowInsecureHTTP = import.meta.env.VITE_ALLOW_INSECURE_HTTP === 'true') {
     this.baseURL = baseURL.replace(/\/+$/, '')
     this.key = key
+    this.allowInsecureHTTP = allowInsecureHTTP
   }
 
   async request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const target = new URL(this.baseURL)
     const localHosts = new Set(['localhost', '127.0.0.1', '[::1]', '::1'])
-    if (target.protocol !== 'https:' && !(target.protocol === 'http:' && localHosts.has(target.hostname))) {
+    if (target.protocol !== 'https:' && !(target.protocol === 'http:' && (localHosts.has(target.hostname) || this.allowInsecureHTTP))) {
       throw new Error('Service URL must use HTTPS unless it points to a loopback address')
     }
     const response = await fetch(`${this.baseURL}${path}`, {

@@ -38,8 +38,23 @@ describe('ServiceAPI', () => {
   it('rejects remote HTTP service URLs before sending credentials', async () => {
     const fetcher = vi.fn()
     vi.stubGlobal('fetch', fetcher)
-    await expect(new ServiceAPI('http://service.example.com', 'secret-key').verify()).rejects.toThrow('must use HTTPS')
+    await expect(new ServiceAPI('http://service.example.com', 'secret-key', false).verify()).rejects.toThrow('must use HTTPS')
     expect(fetcher).not.toHaveBeenCalled()
+  })
+
+  it('allows remote HTTP when explicitly enabled', async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ networks: {} }), { status: 200 }))
+    vi.stubGlobal('fetch', fetcher)
+    await new ServiceAPI('http://service.example.com', 'secret-key', true).verify()
+    expect(fetcher).toHaveBeenCalledOnce()
+  })
+
+  it('reads the insecure HTTP override from the Vite environment', async () => {
+    vi.stubEnv('VITE_ALLOW_INSECURE_HTTP', 'true')
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ networks: {} }), { status: 200 }))
+    vi.stubGlobal('fetch', fetcher)
+    await new ServiceAPI('http://service.example.com', 'secret-key').verify()
+    expect(fetcher).toHaveBeenCalledOnce()
   })
 
   it.each(['http://localhost:8080', 'http://127.0.0.1:8080', 'http://[::1]:8080'])('allows HTTP loopback URL %s', async (url) => {
