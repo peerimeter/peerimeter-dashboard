@@ -27,13 +27,14 @@ export function savedServiceURLs(configured: string | undefined, origin: string,
 
 export function rememberServiceURL(url: string, storage?: Pick<Storage, 'getItem' | 'setItem'>): string[] {
   const normalized = url.trim().replace(/\/+$/, '')
+  const target = storage ?? localStorage
+  let previous: unknown = []
   try {
-    const target = storage ?? localStorage
-    const previous: unknown = JSON.parse(target.getItem(serviceURLsKey) ?? '[]')
-    const urls = [...new Set([normalized, ...(Array.isArray(previous) ? previous.filter((value): value is string => typeof value === 'string') : [])].filter(Boolean))].slice(0, 20)
-    target.setItem(serviceURLsKey, JSON.stringify(urls))
-    return urls
-  } catch { return normalized ? [normalized] : [] }
+    previous = JSON.parse(target.getItem(serviceURLsKey) ?? '[]')
+  } catch { /* Replace malformed stored history with the successful URL. */ }
+  const urls = [...new Set([normalized, ...(Array.isArray(previous) ? previous.filter((value): value is string => typeof value === 'string') : [])].filter(Boolean))].slice(0, 20)
+  try { target.setItem(serviceURLsKey, JSON.stringify(urls)) } catch { /* Keep the connected URL available in memory. */ }
+  return urls
 }
 
 export class ServiceAPI {
