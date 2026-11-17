@@ -41,22 +41,23 @@ screen. Vite embeds this public URL into the frontend build; never put API keys
 or other secrets in `VITE_*` variables. See [.env.example](.env.example).
 
 ```sh
-npm ci
-npm run dev
+make install
+make env # optional: create .env from .env.example
+make run
 ```
 
 Run checks before submitting changes:
 
 ```sh
-npm test
-npm run test:e2e
-npm run test:ui
-npm run lint
-npm run build
-npm audit --audit-level=moderate
+make test
+make test-e2e
+make test-ui
+make lint
+make build
+make audit
 ```
 
-For a production build, run `npm run build`; the static site is emitted to
+For a production build, run `make build`; the static site is emitted to
 `dist/`. Browser tests use Playwright and mock the service API so they do not
 need a running Peerimeter deployment. Install the browser and system
 dependencies with `npx playwright install --with-deps chromium` before running
