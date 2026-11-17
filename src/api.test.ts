@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { defaultServiceURL, joinCommands, rememberServiceURL, savedServiceURLs, ServiceAPI } from './api'
 
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+  vi.unstubAllEnvs()
+  vi.unstubAllGlobals()
+})
 
 describe('ServiceAPI', () => {
   it('normalizes the service URL and sends the shared bearer key', async () => {
