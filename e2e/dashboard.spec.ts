@@ -39,6 +39,10 @@ test('API-key login, network creation, peer editing, and platform join commands'
       await route.fulfill({ json: { version: 1, peers: { [registeredPeer.node_id]: registeredPeer } } })
       return
     }
+    if (process.env.PEERIMETER_DEMO && url.pathname.endsWith('/peers')) {
+      await route.fulfill({ json: { version: 1, peers: {} } })
+      return
+    }
     if (url.pathname === '/api/v1/networks/office/nodes/workstation-1/config' && request.method() === 'GET') {
       if (savedPeer) await route.fulfill({ json: savedPeer })
       else if (process.env.PEERIMETER_DEMO) await route.fulfill({ json: { version: 1 } })
@@ -77,6 +81,7 @@ test('API-key login, network creation, peer editing, and platform join commands'
   await page.getByRole('button', { name: 'Create network', exact: true }).last().click()
   await expect(page.getByRole('heading', { name: 'Lab mesh' })).toBeVisible()
   await demoPause(page)
+  if (process.env.PEERIMETER_DEMO) await expect(page.getByText(/not found/i)).toHaveCount(0)
   expect(networks.at(-1)).toMatchObject({ id: 'lab-mesh', name: 'Lab mesh', cidr: '10.91.0.0/24', version: 1 })
 
   await page.getByRole('button', { name: 'Office mesh' }).click()
