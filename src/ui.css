@@ -23,3 +23,10 @@ td{font-size:12px}
 .readonly-note{font-size:11px}
 .network-label button{display:flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;line-height:0}
 .network-label button svg{display:block;flex:none}
+.join-token-row{align-items:flex-start}
+.join-token-heading{flex:1 1 160px}
+.join-token-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;min-width:0;flex:1 1 320px}
+.join-token-value{min-width:0;max-width:100%;overflow-wrap:anywhere;color:#e8e1ed;font:10px/1.5 'DM Mono',monospace;user-select:text}
+.join-token-masked{color:#8a8294;letter-spacing:.16em;user-select:none}
+.join-token-actions .icon-button{flex:0 0 33px}
+.join-token-actions .copy-button{flex:0 0 auto}
