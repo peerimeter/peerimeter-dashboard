@@ -32,12 +32,19 @@ try {
 
   const video = await findVideo(output)
   if (!video) throw new Error('Playwright completed without producing a demo video.')
+  const palette = join(output, 'palette.png')
+  const gif = join(root, 'public', 'dashboard-demo.gif')
 
   run('ffmpeg', [
     '-y', '-i', video,
-    '-filter_complex',
-    '[0:v]fps=15,scale=1600:-1:flags=lanczos,split[s0][s1];[s0]palettegen=stats_mode=full[p];[s1][p]paletteuse=dither=sierra2_4a',
-    '-loop', '0', join(root, 'public', 'dashboard-demo.gif'),
+    '-vf', 'fps=15,scale=1600:-1:flags=lanczos,palettegen=stats_mode=full',
+    palette,
+  ])
+
+  run('ffmpeg', [
+    '-y', '-i', video, '-i', palette,
+    '-filter_complex', '[0:v]fps=15,scale=1600:-1:flags=lanczos[scaled];[scaled][1:v]paletteuse=dither=sierra2_4a',
+    '-loop', '0', gif,
   ])
 
   console.log('Wrote public/dashboard-demo.gif')
