@@ -25,6 +25,14 @@ jobs:
       - run: npm run lint
       - run: npm run build
       - run: npm audit --audit-level=moderate
+      - name: Upload Playwright failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: playwright-failure-artifacts
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Verify GitHub Actions lockfile
         env:
           GH_TOKEN: ${{ github.token }}

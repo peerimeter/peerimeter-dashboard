@@ -10,7 +10,9 @@ export default defineConfig({
     launchOptions: process.env.PEERIMETER_DEMO ? { slowMo: 180 } : {},
     ...devices['Desktop Chrome'],
     viewport: process.env.PEERIMETER_DEMO ? { width: 1600, height: 900 } : devices['Desktop Chrome'].viewport,
-    video: process.env.PEERIMETER_DEMO ? { mode: 'on', size: { width: 1600, height: 900 } } : 'off',
+    video: process.env.PEERIMETER_DEMO
+      ? { mode: 'on', size: { width: 1600, height: 900 } }
+      : process.env.CI ? 'retain-on-failure' : 'off',
   },
   webServer: {
     command: 'npm run dev -- --host 127.0.0.1',
