@@ -53,6 +53,9 @@ make env # optional: create .env from .env.example
 make run
 ```
 
+The Vite development and preview servers listen on `0.0.0.0`, making them
+reachable through the host's network interfaces.
+
 Run `make demo-gif` to regenerate the README demonstration (requires ffmpeg).
 
 Run checks before submitting changes:
