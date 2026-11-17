@@ -7,9 +7,10 @@ export default defineConfig({
   use: {
     baseURL: 'http://127.0.0.1:5173',
     trace: 'retain-on-failure',
-    video: process.env.PEERIMETER_DEMO ? 'on' : 'off',
-    launchOptions: process.env.PEERIMETER_DEMO ? { slowMo: 120 } : {},
+    launchOptions: process.env.PEERIMETER_DEMO ? { slowMo: 180 } : {},
     ...devices['Desktop Chrome'],
+    viewport: process.env.PEERIMETER_DEMO ? { width: 1280, height: 720 } : devices['Desktop Chrome'].viewport,
+    video: process.env.PEERIMETER_DEMO ? { mode: 'on', size: { width: 1280, height: 720 } } : 'off',
   },
   webServer: {
     command: 'npm run dev -- --host 127.0.0.1',

@@ -13,7 +13,7 @@ const registeredPeer = {
 }
 
 async function demoPause(page: import('@playwright/test').Page) {
-  if (process.env.PEERIMETER_DEMO) await page.waitForTimeout(1300)
+  if (process.env.PEERIMETER_DEMO) await page.waitForTimeout(1800)
 }
 
 test('API-key login, network creation, peer editing, and platform join commands', async ({ page }, testInfo) => {
@@ -40,9 +40,9 @@ test('API-key login, network creation, peer editing, and platform join commands'
       return
     }
     if (url.pathname === '/api/v1/networks/office/nodes/workstation-1/config' && request.method() === 'GET') {
-      await route.fulfill(savedPeer
-        ? { json: savedPeer }
-        : { status: 404, contentType: 'application/json', body: JSON.stringify({ error: 'configuration not found' }) })
+      if (savedPeer) await route.fulfill({ json: savedPeer })
+      else if (process.env.PEERIMETER_DEMO) await route.fulfill({ json: { version: 1 } })
+      else await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: 'configuration not found' }) })
       return
     }
     if (url.pathname === '/api/v1/networks/office/nodes/workstation-1/config' && request.method() === 'PUT') {
