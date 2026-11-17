@@ -50,8 +50,9 @@ Remote service URLs must use HTTPS by default; HTTP loopback URLs are allowed
 for local development. To disable this check, set
 `VITE_ALLOW_INSECURE_HTTP=true` in `.env` before starting Vite or building the
 dashboard. This build-time option allows HTTP service URLs, which expose the
-shared API key in transit; use it only on trusted networks. Browsers may still
-block HTTP API requests from an HTTPS dashboard as mixed content.
+shared API key in transit; use it only on trusted networks. It only relaxes the
+service URL check; it does not add TLS to the dashboard server or override a
+browser's mixed-content blocking of HTTP API requests from an HTTPS dashboard.
 
 ```sh
 make install
@@ -60,7 +61,14 @@ make run
 ```
 
 The Vite development and preview servers listen on `0.0.0.0`, making them
-reachable through the host's network interfaces.
+reachable through the host's network interfaces. They serve plain HTTP and
+have no login gate of their own. Restrict the Vite port to trusted clients; for
+shared or untrusted networks, put an authenticated HTTPS reverse proxy in front
+and block direct access to the Vite port. The dashboard's API-key sign-in does
+not protect the JavaScript served over HTTP from on-path modification. Under
+WSL 2's default NAT networking, LAN clients generally need port forwarding;
+mirrored networking can provide LAN access subject to firewall rules. See
+[Microsoft's WSL networking guide](https://learn.microsoft.com/windows/wsl/networking).
 
 Run `make demo-gif` to regenerate the README demonstration (requires ffmpeg).
 
