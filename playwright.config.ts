@@ -9,8 +9,8 @@ export default defineConfig({
     trace: 'retain-on-failure',
     launchOptions: process.env.PEERIMETER_DEMO ? { slowMo: 180 } : {},
     ...devices['Desktop Chrome'],
-    viewport: process.env.PEERIMETER_DEMO ? { width: 1280, height: 720 } : devices['Desktop Chrome'].viewport,
-    video: process.env.PEERIMETER_DEMO ? { mode: 'on', size: { width: 1280, height: 720 } } : 'off',
+    viewport: process.env.PEERIMETER_DEMO ? { width: 1600, height: 900 } : devices['Desktop Chrome'].viewport,
+    video: process.env.PEERIMETER_DEMO ? { mode: 'on', size: { width: 1600, height: 900 } } : 'off',
   },
   webServer: {
     command: 'npm run dev -- --host 127.0.0.1',
