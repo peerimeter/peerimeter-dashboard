@@ -10,6 +10,7 @@
     "test": "vitest run src",
     "lint": "tsc -b --pretty false",
     "test:e2e": "playwright test",
+    "demo:gif": "node e2e/create-demo-gif.mjs",
     "test:ui": "playwright test --ui"
   },
   "dependencies": {

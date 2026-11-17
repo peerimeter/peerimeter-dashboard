@@ -12,6 +12,10 @@ const registeredPeer = {
   primary_interface: 'en0',
 }
 
+async function demoPause(page: import('@playwright/test').Page) {
+  if (process.env.PEERIMETER_DEMO) await page.waitForTimeout(1300)
+}
+
 test('API-key login, network creation, peer editing, and platform join commands', async ({ page }, testInfo) => {
   let networks = [initialNetwork]
   let savedPeer: Record<string, unknown> | null = null
@@ -60,6 +64,7 @@ test('API-key login, network creation, peer editing, and platform join commands'
   await page.getByLabel('API key').fill('test-api-key')
   await page.getByRole('button', { name: 'Connect to service' }).click()
   await expect(page.getByRole('heading', { name: 'Office mesh' })).toBeVisible()
+  await demoPause(page)
   await expect(page.getByText('workstation-1')).toBeVisible()
   await expect.poll(() => page.evaluate(() => sessionStorage.getItem('peerimeter.session'))).toContain('test-api-key')
   expect(await page.evaluate(() => localStorage.getItem('peerimeter.serviceURLs'))).toContain('http://127.0.0.1:5173')
@@ -71,22 +76,26 @@ test('API-key login, network creation, peer editing, and platform join commands'
   await page.getByLabel('Private IPv4 CIDR').fill('10.91.0.0/24')
   await page.getByRole('button', { name: 'Create network', exact: true }).last().click()
   await expect(page.getByRole('heading', { name: 'Lab mesh' })).toBeVisible()
+  await demoPause(page)
   expect(networks.at(-1)).toMatchObject({ id: 'lab-mesh', name: 'Lab mesh', cidr: '10.91.0.0/24', version: 1 })
 
   await page.getByRole('button', { name: 'Office mesh' }).click()
   await expect(page.getByRole('heading', { name: 'Office mesh' })).toBeVisible()
   await page.getByRole('row', { name: /workstation-1/ }).click()
   await expect(page.getByRole('heading', { name: 'workstation-1' })).toBeVisible()
+  await demoPause(page)
   await expect(page.getByText('Primary interface')).toBeVisible()
   await expect(page.getByText(/en0.*192.168.1.10\/24/)).toBeVisible()
   await page.getByLabel('Display name').fill('Design Mac')
   await page.getByLabel('Notes').fill('Studio workstation')
   await page.getByRole('button', { name: 'Save details' }).click()
   await expect(page.getByRole('row', { name: /Design Mac/ })).toBeVisible()
+  await demoPause(page)
   expect(savedPeer).toMatchObject({ version: 1, name: 'Design Mac', notes: 'Studio workstation' })
 
   await page.getByRole('button', { name: 'Add a peer' }).click()
   await expect(page.getByText('Linux & macOS')).toBeVisible()
+  await demoPause(page)
   await page.screenshot({ path: testInfo.outputPath('join-commands.png'), fullPage: true })
   await expect(page.getByText('Windows', { exact: true })).toBeVisible()
   await expect(page.locator('pre').nth(0)).toContainText('sudo peerimeter-agent join')

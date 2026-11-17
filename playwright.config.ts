@@ -7,6 +7,8 @@ export default defineConfig({
   use: {
     baseURL: 'http://127.0.0.1:5173',
     trace: 'retain-on-failure',
+    video: process.env.PEERIMETER_DEMO ? 'on' : 'off',
+    launchOptions: process.env.PEERIMETER_DEMO ? { slowMo: 120 } : {},
     ...devices['Desktop Chrome'],
   },
   webServer: {
