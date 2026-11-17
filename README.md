@@ -34,7 +34,10 @@ administrator privileges on Windows and root privileges on Linux/macOS.
 
 ## Development
 
-Requirements: Node.js 22 and npm.
+Requirements: Node.js 22, npm, and GNU Make. If `make` is not already
+available, install it with your operating system's package manager (for
+example, `sudo apt install make` on Debian or Ubuntu, or `brew install make` on
+macOS). On Windows, use WSL or install GNU Make with a Windows package manager.
 
 Set `VITE_SERVICE_URL` in a `.env` file to prefill the API URL on the login
 screen. Vite embeds this public URL into the frontend build; never put API keys
