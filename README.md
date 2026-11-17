@@ -46,6 +46,12 @@ On Windows, use WSL, which provides the Unix utilities used by `make env` too.
 Set `VITE_SERVICE_URL` in a `.env` file to prefill the API URL on the login
 screen. Vite embeds this public URL into the frontend build; never put API keys
 or other secrets in `VITE_*` variables. See [.env.example](.env.example).
+Remote service URLs must use HTTPS by default; HTTP loopback URLs are allowed
+for local development. To disable this check, set
+`VITE_ALLOW_INSECURE_HTTP=true` in `.env` before starting Vite or building the
+dashboard. This build-time option allows HTTP service URLs, which expose the
+shared API key in transit; use it only on trusted networks. Browsers may still
+block HTTP API requests from an HTTPS dashboard as mixed content.
 
 ```sh
 make install
