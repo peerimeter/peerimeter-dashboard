@@ -7,7 +7,7 @@
 .eyebrow{font-size:11px}
 .form-stack label{font-size:13px}
 .form-stack input,.form-stack textarea,.form-stack select{font-size:14px}
-.form-stack select{width:100%;padding:10px 11px;border:1px solid #332d41;border-radius:8px;background:#0c0a12;color:#f8f5ff}
+.form-stack select{width:100%;padding:10px 1.75rem 10px 11px;border:1px solid #332d41;border-radius:8px;background:#0c0a12;color:#f8f5ff}
 .login-copy p,.modal-intro,.page-heading p{font-size:14px}
 .side-label{font-size:11px}
 .network-nav,.stat-label,.card-heading p,.table-actions .button{font-size:13px}
