@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { defaultServiceURL, joinCommands, ServiceAPI } from './api'
+import { defaultServiceURL, joinCommands, rememberServiceURL, savedServiceURLs, ServiceAPI } from './api'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -62,6 +62,16 @@ describe('defaultServiceURL', () => {
     expect(defaultServiceURL(' https://api.example.test/ ', 'https://dashboard.example.test')).toBe('https://api.example.test/')
     expect(defaultServiceURL(undefined, 'https://dashboard.example.test')).toBe('https://dashboard.example.test')
     expect(defaultServiceURL('  ', 'https://dashboard.example.test')).toBe('https://dashboard.example.test')
+  })
+})
+
+describe('savedServiceURLs', () => {
+  it('retains the configured default and remembers only successful service URLs', () => {
+    const data = new Map<string, string>()
+    const storage = { getItem: (key: string) => data.get(key) ?? null, setItem: (key: string, value: string) => data.set(key, value) }
+    expect(savedServiceURLs(' https://default.example/ ', 'https://dashboard.example', storage)).toEqual(['https://default.example'])
+    rememberServiceURL('https://connected.example/', storage)
+    expect(savedServiceURLs('https://default.example', 'https://dashboard.example', storage)).toEqual(['https://default.example', 'https://connected.example'])
   })
 })
 

@@ -9,6 +9,7 @@ const registeredPeer = {
   listen_port: 51820,
   local_addresses: ['192.168.1.10/24'],
   public_endpoint: '198.51.100.20:51820',
+  primary_interface: 'en0',
 }
 
 test('API-key login, network creation, peer editing, and platform join commands', async ({ page }, testInfo) => {
@@ -61,7 +62,7 @@ test('API-key login, network creation, peer editing, and platform join commands'
   await expect(page.getByRole('heading', { name: 'Office mesh' })).toBeVisible()
   await expect(page.getByText('workstation-1')).toBeVisible()
   await expect.poll(() => page.evaluate(() => sessionStorage.getItem('peerimeter.session'))).toContain('test-api-key')
-  expect(await page.evaluate(() => localStorage.getItem('peerimeter.session'))).toBeNull()
+  expect(await page.evaluate(() => localStorage.getItem('peerimeter.serviceURLs'))).toContain('http://127.0.0.1:5173')
   await page.screenshot({ path: testInfo.outputPath('dashboard-network.png'), fullPage: true })
 
   await page.getByRole('button', { name: 'Create network' }).first().click()
@@ -91,7 +92,9 @@ test('API-key login, network creation, peer editing, and platform join commands'
   await expect(page.locator('pre').nth(1)).toContainText('Read-Host')
   await expect(page.locator('pre').nth(1)).toContainText('peerimeter-agent.exe" join')
   await expect(page.locator('pre').nth(1)).not.toContainText('test-join-bundle-token')
-  await expect(page.getByText(/grants access to every network/i)).toBeVisible()
+  await expect(page.getByText(/only to this network/i)).toBeVisible()
+  await expect(page.getByText('Primary interface')).toBeVisible()
+  await expect(page.getByText(/en0.*192.168.1.10\/24/)).toBeVisible()
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
   await page.getByRole('button', { name: 'Copy token' }).click()
   await expect(page.getByRole('button', { name: 'Copied' })).toBeVisible()
