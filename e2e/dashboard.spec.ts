@@ -56,7 +56,7 @@ test('API-key login, network creation, peer editing, and platform join commands'
 
   await page.goto('/')
   await expect(page.getByRole('heading', { name: /your networks/i })).toBeVisible()
-  await page.getByLabel('Service URL').fill('http://127.0.0.1:5173')
+  await page.getByRole('textbox', { name: 'Service URL' }).fill('http://127.0.0.1:5173')
   await page.getByLabel('API key').fill('test-api-key')
   await page.getByRole('button', { name: 'Connect to service' }).click()
   await expect(page.getByRole('heading', { name: 'Office mesh' })).toBeVisible()
@@ -106,7 +106,7 @@ test('invalid API key stays on the login screen and shows the service error', as
     await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'unauthorized' }) })
   })
   await page.goto('/')
-  await page.getByLabel('Service URL').fill('http://127.0.0.1:5173')
+  await page.getByRole('textbox', { name: 'Service URL' }).fill('http://127.0.0.1:5173')
   await page.getByLabel('API key').fill('wrong-key')
   await page.getByRole('button', { name: 'Connect to service' }).click()
   await expect(page.getByText('unauthorized')).toBeVisible()

@@ -91,7 +91,7 @@ export function App() {
     try {
       await client.verify()
       sessionStorage.setItem('peerimeter.session', JSON.stringify(credentials))
-      setServiceURLs(rememberServiceURL(credentials.url))
+      setServiceURLs([...new Set([...savedServiceURLs(configuredServiceURL, location.origin), ...rememberServiceURL(credentials.url)])])
       setAPI(client); await refresh(client, '')
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not connect to Peerimeter Service') }
     finally { setBusy(false) }

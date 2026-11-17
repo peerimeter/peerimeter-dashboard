@@ -16,21 +16,24 @@ export function defaultServiceURL(configured: string | undefined, origin: string
 
 const serviceURLsKey = 'peerimeter.serviceURLs'
 
-export function savedServiceURLs(configured: string | undefined, origin: string, storage: Pick<Storage, 'getItem'> = localStorage): string[] {
+export function savedServiceURLs(configured: string | undefined, origin: string, storage?: Pick<Storage, 'getItem'>): string[] {
   const urls = [defaultServiceURL(configured, origin)]
   try {
-    const stored: unknown = JSON.parse(storage.getItem(serviceURLsKey) ?? '[]')
+    const stored: unknown = JSON.parse((storage ?? localStorage).getItem(serviceURLsKey) ?? '[]')
     if (Array.isArray(stored)) urls.push(...stored.filter((value): value is string => typeof value === 'string'))
   } catch { /* Ignore malformed browser storage. */ }
   return [...new Set(urls.map((url) => url.trim().replace(/\/+$/, '')).filter(Boolean))]
 }
 
-export function rememberServiceURL(url: string, storage: Pick<Storage, 'getItem' | 'setItem'> = localStorage): string[] {
-  let previous: unknown = []
-  try { previous = JSON.parse(storage.getItem(serviceURLsKey) ?? '[]') } catch { /* Replace malformed browser storage. */ }
-  const urls = [...new Set([url.trim().replace(/\/+$/, ''), ...(Array.isArray(previous) ? previous.filter((value): value is string => typeof value === 'string') : [])].filter(Boolean))].slice(0, 20)
-  try { storage.setItem(serviceURLsKey, JSON.stringify(urls)) } catch { /* Keep login usable when browser storage is unavailable. */ }
-  return urls
+export function rememberServiceURL(url: string, storage?: Pick<Storage, 'getItem' | 'setItem'>): string[] {
+  const normalized = url.trim().replace(/\/+$/, '')
+  try {
+    const target = storage ?? localStorage
+    const previous: unknown = JSON.parse(target.getItem(serviceURLsKey) ?? '[]')
+    const urls = [...new Set([normalized, ...(Array.isArray(previous) ? previous.filter((value): value is string => typeof value === 'string') : [])].filter(Boolean))].slice(0, 20)
+    target.setItem(serviceURLsKey, JSON.stringify(urls))
+    return urls
+  } catch { return normalized ? [normalized] : [] }
 }
 
 export class ServiceAPI {
