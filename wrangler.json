@@ -1,4 +1,8 @@
 {
-    "previews": {},
-    "name": "peerimeter-dashboard"
+  "assets": {
+    "directory": "./dist"
+  },
+  "compatibility_date": "2026-11-16",
+  "name": "peerimeter-dashboard",
+  "previews": {}
 }
