@@ -36,8 +36,10 @@ administrator privileges on Windows and root privileges on Linux/macOS.
 
 Requirements: Node.js 22, npm, and GNU Make. If `make` is not already
 available, install it with your operating system's package manager (for
-example, `sudo apt install make` on Debian or Ubuntu, or `brew install make` on
-macOS). On Windows, use WSL or install GNU Make with a Windows package manager.
+example, `sudo apt install make` on Debian or Ubuntu). On macOS, install it with
+`brew install make`, then add Homebrew's GNU Make binary to the current shell's
+`PATH` with `export PATH="$(brew --prefix make)/libexec/gnubin:$PATH"`.
+On Windows, use WSL, which provides the Unix utilities used by `make env` too.
 
 Set `VITE_SERVICE_URL` in a `.env` file to prefill the API URL on the login
 screen. Vite embeds this public URL into the frontend build; never put API keys
