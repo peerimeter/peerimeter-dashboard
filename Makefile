@@ -1,6 +1,6 @@
 NPM ?= npm
 
-.PHONY: env install run test test-e2e test-ui lint build preview audit
+.PHONY: env install run test test-e2e test-ui demo-gif lint build preview audit
 
 env:
 	@test -f .env || cp .env.example .env
@@ -19,6 +19,9 @@ test-e2e:
 
 test-ui:
 	$(NPM) run test:ui
+
+demo-gif:
+	$(NPM) run demo:gif
 
 lint:
 	$(NPM) run lint

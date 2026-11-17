@@ -5,6 +5,8 @@ current Peerimeter Service API. It supports API-key sign-in, creating and
 listing managed networks, listing registered peers, editing peer display
 metadata, and copying install/join commands for Linux, macOS, and Windows.
 
+![Slow demonstration of dashboard sign-in, network creation, peer editing, and join commands](public/dashboard-demo.gif)
+
 ## Current API limits
 
 The dashboard follows the service's current shared-key API. The API key has
@@ -50,6 +52,8 @@ make install
 make env # optional: create .env from .env.example
 make run
 ```
+
+Run `make demo-gif` to regenerate the README demonstration (requires ffmpeg).
 
 Run checks before submitting changes:
 
