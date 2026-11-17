@@ -36,7 +36,7 @@ try {
   run('ffmpeg', [
     '-y', '-i', video,
     '-filter_complex',
-    '[0:v]fps=8,scale=960:-1:flags=lanczos,split[s0][s1];[s0]palettegen=stats_mode=diff[p];[s1][p]paletteuse=dither=bayer:bayer_scale=3',
+    '[0:v]fps=10,scale=1280:-1:flags=lanczos,split[s0][s1];[s0]palettegen=stats_mode=full[p];[s1][p]paletteuse=dither=sierra2_4a',
     '-loop', '0', join(root, 'public', 'dashboard-demo.gif'),
   ])
 
