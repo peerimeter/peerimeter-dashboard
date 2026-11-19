@@ -110,6 +110,10 @@ export function App() {
     }).finally(() => {
       window.clearTimeout(timeoutID)
     })
+    return () => {
+      restoreActive = false
+      window.clearTimeout(timeoutID)
+    }
   }, [])
 
   async function signIn(event: React.FormEvent<HTMLFormElement>) {
