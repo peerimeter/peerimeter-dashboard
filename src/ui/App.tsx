@@ -40,6 +40,7 @@ export function App() {
   const [showJoinToken, setShowJoinToken] = useState(false)
   const [copied, setCopied] = useState('')
   const peerLoadID = useRef(0)
+  const refreshLoadID = useRef(0)
   const peerNameEditID = useRef<Record<string, number>>({})
   const peerConfigLoadID = useRef(0)
   const joinLoadID = useRef(0)
@@ -81,24 +82,26 @@ export function App() {
 
   async function refresh(client = api, networkID = selectedID, isCurrent = () => true, knownNetworks?: Network[]) {
     if (!client) return
+    const requestID = ++refreshLoadID.current
+    const isRefreshCurrent = () => requestID === refreshLoadID.current && isCurrent()
     peerLoadID.current++
     setPeers([]); setPeerNames({})
     setPeersLoading(true); setPeersLoadFailed(false)
     setBusy(true); setError('')
     try {
       const items = knownNetworks ?? await client.networks()
-      if (!isCurrent()) return
+      if (!isRefreshCurrent()) return
       setNetworks(items)
       const nextID = items.some((network) => network.id === networkID) ? networkID : items[0]?.id ?? ''
       setSelectedID(nextID)
-      void loadPeers(client, nextID, isCurrent)
+      void loadPeers(client, nextID, isRefreshCurrent)
     } catch (cause) {
-      if (isCurrent()) {
+      if (isRefreshCurrent()) {
         setPeersLoading(false); setPeersLoadFailed(true)
         setError(cause instanceof Error ? cause.message : 'Could not load service data')
       }
     }
-    finally { if (isCurrent()) setBusy(false) }
+    finally { if (isRefreshCurrent()) setBusy(false) }
   }
 
   useEffect(() => {
@@ -154,6 +157,7 @@ export function App() {
   }
 
   async function selectNetwork(id: string) {
+    refreshLoadID.current++
     setSelectedID(id); setActive(null); setJoinToken(''); setShowJoinToken(false); setError(''); joinLoadID.current++
     if (!api || !id) { setPeers([]); setPeerNames({}); setPeersLoading(false); setPeersLoadFailed(false); return }
     setBusy(true)
@@ -213,7 +217,7 @@ export function App() {
   }
 
   function signOut() {
-    peerLoadID.current++; peerConfigLoadID.current++; joinLoadID.current++
+    refreshLoadID.current++; peerLoadID.current++; peerConfigLoadID.current++; joinLoadID.current++
     sessionStorage.removeItem('peerimeter.session'); setAPI(null); setNetworks([]); setPeers([]); setPeersLoading(false); setPeersLoadFailed(false); setPeerNames({}); setSelectedID(''); setActive(null); setJoinToken(''); setShowJoinToken(false); setPeerConfig({}); setPeerConfigLoaded(false)
     setCredentials({ url: defaultServiceURL(configuredServiceURL, location.origin), key: '' })
   }
