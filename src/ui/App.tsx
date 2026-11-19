@@ -96,11 +96,12 @@ export function App() {
       setError('Could not restore your session. Please sign in again.')
       setCheckingSession(false)
     }, SESSION_RESTORE_TIMEOUT_MS)
-    client.verify().then(() => {
+    client.verify().then(async () => {
+      if (!restoreActive) return
+      await refresh(client)
       if (!restoreActive) return
       setAPI(client)
       setCheckingSession(false)
-      void refresh(client)
     }).catch(() => {
       if (!restoreActive) return
       sessionStorage.removeItem('peerimeter.session')
