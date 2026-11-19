@@ -168,8 +168,8 @@ export function App() {
       <div className="login-copy"><span className="eyebrow">CONTROL PLANE</span><h1>Your networks,<br /><em>in one place.</em></h1><p>Connect to your Peerimeter Service and manage your mesh.</p></div>
       <form onSubmit={signIn} className="form-stack">
         {serviceURLs.length > 0 && <label>Previously used URL<select aria-label="Previous endpoint list" value={serviceURLs.includes(credentials.url.replace(/\/+$/, '')) ? credentials.url.replace(/\/+$/, '') : '__custom'} onChange={(e) => { if (e.target.value !== '__custom') setCredentials({ ...credentials, url: e.target.value }) }}><option value="__custom">Enter a service URL</option>{serviceURLs.map((url) => <option key={url} value={url}>{url}</option>)}</select></label>}
-        <label>Service URL<span className="input-icon"><Globe2 size={16} /><input required type="url" placeholder="https://service.example.com" value={credentials.url} onChange={(e) => setCredentials({ ...credentials, url: e.target.value })} /></span></label>
-        <label>API key<span className="input-icon"><KeyRound size={16} /><input required type="password" autoComplete="current-password" placeholder="Paste your service API key" value={credentials.key} onChange={(e) => setCredentials({ ...credentials, key: e.target.value })} /></span></label>
+        <label>Service URL<span className="input-icon"><Globe2 size={16} /><input required type="url" name="username" autoComplete="username" placeholder="https://service.example.com" value={credentials.url} onChange={(e) => setCredentials({ ...credentials, url: e.target.value })} /></span></label>
+        <label>API key<span className="input-icon"><KeyRound size={16} /><input required type="password" name="password" autoComplete="current-password" placeholder="Paste your service API key" value={credentials.key} onChange={(e) => setCredentials({ ...credentials, key: e.target.value })} /></span></label>
         {error && <p className="error-text">{error}</p>}
         <button className="button primary full" disabled={busy}>{busy ? 'Connecting…' : 'Connect to service'}<ArrowUpRight size={16} /></button>
       </form>
