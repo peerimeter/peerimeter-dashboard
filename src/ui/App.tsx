@@ -27,6 +27,7 @@ export function App() {
   const [peers, setPeers] = useState<Peer[]>([])
   const [peersLoading, setPeersLoading] = useState(false)
   const [peersLoadFailed, setPeersLoadFailed] = useState(false)
+  const [networksLoading, setNetworksLoading] = useState(false)
   const [networksLoadFailed, setNetworksLoadFailed] = useState(false)
   const [peerNames, setPeerNames] = useState<Record<string, string>>({})
   const [active, setActive] = useState<Peer | null>(null)
@@ -42,6 +43,7 @@ export function App() {
   const [copied, setCopied] = useState('')
   const peerLoadID = useRef(0)
   const refreshLoadID = useRef(0)
+  const sessionID = useRef(0)
   const peerNameEditID = useRef<Record<string, number>>({})
   const peerConfigLoadID = useRef(0)
   const joinLoadID = useRef(0)
@@ -84,22 +86,24 @@ export function App() {
   async function refresh(client = api, networkID = selectedID, isCurrent = () => true, knownNetworks?: Network[]) {
     if (!client) return
     const requestID = ++refreshLoadID.current
-    const isRefreshCurrent = () => requestID === refreshLoadID.current && isCurrent()
+    const currentSessionID = sessionID.current
+    const isRefreshCurrent = () => requestID === refreshLoadID.current && currentSessionID === sessionID.current && isCurrent()
     peerLoadID.current++
     setPeers([]); setPeerNames({})
     setPeersLoading(true); setPeersLoadFailed(false)
-    setNetworksLoadFailed(false)
+    setNetworksLoading(true)
     setBusy(true); setError('')
     try {
       const items = knownNetworks ?? await client.networks()
       if (!isRefreshCurrent()) return
+      setNetworksLoading(false); setNetworksLoadFailed(false)
       setNetworks(items)
       const nextID = items.some((network) => network.id === networkID) ? networkID : items[0]?.id ?? ''
       setSelectedID(nextID)
       void loadPeers(client, nextID, isRefreshCurrent)
     } catch (cause) {
       if (isRefreshCurrent()) {
-        setPeersLoading(false); setPeersLoadFailed(true)
+        setPeersLoading(false); setPeersLoadFailed(true); setNetworksLoading(false)
         setNetworksLoadFailed(true)
         setError(cause instanceof Error ? cause.message : 'Could not load service data')
       }
@@ -147,20 +151,23 @@ export function App() {
 
   async function signIn(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError('')
+    const requestSessionID = ++sessionID.current
     const signedInCredentials = { ...credentials, url: credentials.url.trim() }
     const client = new ServiceAPI(signedInCredentials.url, signedInCredentials.key)
     try {
       await client.verify()
+      if (sessionID.current !== requestSessionID) return
       sessionStorage.setItem('peerimeter.session', JSON.stringify(signedInCredentials))
       setCredentials(signedInCredentials)
       setServiceURLs([...new Set([...savedServiceURLs(configuredServiceURL, location.origin), ...rememberServiceURL(signedInCredentials.url)])])
-      setAPI(client); await refresh(client, '')
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not connect to Peerimeter Service') }
-    finally { setBusy(false) }
+      setAPI(client); await refresh(client, '', () => sessionID.current === requestSessionID)
+    } catch (cause) { if (sessionID.current === requestSessionID) setError(cause instanceof Error ? cause.message : 'Could not connect to Peerimeter Service') }
+    finally { if (sessionID.current === requestSessionID) setBusy(false) }
   }
 
   async function selectNetwork(id: string) {
     refreshLoadID.current++
+    setNetworksLoading(false)
     setSelectedID(id); setActive(null); setJoinToken(''); setShowJoinToken(false); setError(''); joinLoadID.current++
     if (!api || !id) { setPeers([]); setPeerNames({}); setPeersLoading(false); setPeersLoadFailed(false); return }
     setBusy(true)
@@ -181,28 +188,33 @@ export function App() {
 
   async function createNetwork(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (!api) return
+    const client = api
+    const requestSessionID = sessionID.current
     const form = new FormData(event.currentTarget)
     const name = String(form.get('name') ?? '').trim()
     const network = { version: 1, name, id: slug(String(form.get('id') || name)), cidr: String(form.get('cidr') ?? '').trim() }
     setBusy(true); setError('')
     try {
-      await api.createNetwork(network)
-      setModal(null); setNotice('Network created'); await refresh(api, network.id)
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not create network') }
-    finally { setBusy(false) }
+      await client.createNetwork(network)
+      if (sessionID.current !== requestSessionID) return
+      setModal(null); setNotice('Network created'); await refresh(client, network.id, () => sessionID.current === requestSessionID)
+    } catch (cause) { if (sessionID.current === requestSessionID) setError(cause instanceof Error ? cause.message : 'Could not create network') }
+    finally { if (sessionID.current === requestSessionID) setBusy(false) }
   }
 
   async function savePeer(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (!api || !active) return
+    const requestSessionID = sessionID.current
     const form = new FormData(event.currentTarget)
     const config = { ...peerConfig, version: 1, name: String(form.get('name') ?? '').trim(), notes: String(form.get('notes') ?? '').trim() }
     setBusy(true); setError('')
     try {
       await api.savePeerConfig(selectedID, active.node_id, config)
+      if (sessionID.current !== requestSessionID) return
       peerNameEditID.current = { ...peerNameEditID.current, [active.node_id]: (peerNameEditID.current[active.node_id] ?? 0) + 1 }
       setPeerConfig(config); setPeerNames((previous) => ({ ...previous, [active.node_id]: String(config.name) })); setModal(null); setNotice('Peer details saved')
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not save peer') }
-    finally { setBusy(false) }
+    } catch (cause) { if (sessionID.current === requestSessionID) setError(cause instanceof Error ? cause.message : 'Could not save peer') }
+    finally { if (sessionID.current === requestSessionID) setBusy(false) }
   }
 
   async function showJoin() {
@@ -220,8 +232,8 @@ export function App() {
   }
 
   function signOut() {
-    refreshLoadID.current++; peerLoadID.current++; peerConfigLoadID.current++; joinLoadID.current++
-    sessionStorage.removeItem('peerimeter.session'); setAPI(null); setNetworks([]); setPeers([]); setPeersLoading(false); setPeersLoadFailed(false); setNetworksLoadFailed(false); setPeerNames({}); setSelectedID(''); setActive(null); setJoinToken(''); setShowJoinToken(false); setPeerConfig({}); setPeerConfigLoaded(false)
+    sessionID.current++; refreshLoadID.current++; peerLoadID.current++; peerConfigLoadID.current++; joinLoadID.current++
+    sessionStorage.removeItem('peerimeter.session'); setAPI(null); setNetworks([]); setPeers([]); setPeersLoading(false); setPeersLoadFailed(false); setNetworksLoading(false); setNetworksLoadFailed(false); setPeerNames({}); setSelectedID(''); setActive(null); setJoinToken(''); setShowJoinToken(false); setPeerConfig({}); setPeerConfigLoaded(false)
     setBusy(false)
     setCredentials({ url: defaultServiceURL(configuredServiceURL, location.origin), key: '' })
   }
@@ -250,14 +262,14 @@ export function App() {
       <div className="side-label">WORKSPACE</div>
       <div className="service-tag"><span className="live-dot" /><span><b>Service connected</b><small>{new URL(api.baseURL).host}</small></span></div>
       <div className="side-label network-label">NETWORKS <button aria-label="Create network" onClick={() => { setError(''); setModal('network') }}><Plus size={15} /></button></div>
-      <nav className="network-list">{networks.map((network) => <button key={network.id} className={selectedID === network.id ? 'network-nav active' : 'network-nav'} onClick={() => void selectNetwork(network.id)}><span className="nav-mark">⌁</span><span>{network.name}</span><ChevronRight size={14} /></button>)}{networks.length === 0 && <p className="empty-nav">No networks yet</p>}</nav>
+      <nav className="network-list">{networks.map((network) => <button key={network.id} className={selectedID === network.id ? 'network-nav active' : 'network-nav'} onClick={() => void selectNetwork(network.id)}><span className="nav-mark">⌁</span><span>{network.name}</span><ChevronRight size={14} /></button>)}{networks.length === 0 && <p className="empty-nav">{networksLoading ? 'Loading networks…' : networksLoadFailed ? 'Could not load networks' : 'No networks yet'}</p>}</nav>
       <div className="sidebar-bottom"><a className="help-card" href="https://github.com/peerimeter/.github/blob/main/README.md#quick-setup-register-agents-through-the-service" target="_blank" rel="noreferrer"><CircleHelp size={16} /><span><b>Need a hand?</b><small>Read the setup guide</small></span><ArrowUpRight size={13} /></a><button className="logout" onClick={signOut}><LogOut size={15} /> Disconnect</button></div>
     </aside>
     <main className="main-panel">
       <header className="topbar"><div className="breadcrumbs"><span>Networks</span>{selected && <><ChevronRight size={13} /><strong>{selected.name}</strong></>}</div><div className="top-actions"><span className="secure-pill"><span className="live-dot" /> API connected</span><button className="icon-button" title="Refresh" onClick={() => void refresh()}><RefreshCw size={16} className={busy ? 'spin' : ''} /></button><div className="avatar">P</div></div></header>
       {error && <div className="alert error-alert"><span>{error}</span><button onClick={() => setError('')}><X size={15} /></button></div>}
       {notice && <div className="alert success-alert"><Check size={15} /><span>{notice}</span><button onClick={() => setNotice('')}><X size={15} /></button></div>}
-      {!selected ? <section className="welcome"><div className="welcome-orb"><Globe2 size={28} /></div><span className="eyebrow">PEERIMETER DASHBOARD</span><h1>{networksLoadFailed ? 'Could not load networks.' : 'Start with a network.'}</h1><p>{networksLoadFailed ? 'Try refreshing the service data.' : 'Create your first private network, then invite peers from any platform.'}</p>{networksLoadFailed ? <button className="button primary" onClick={() => void refresh()}><RefreshCw size={16} /> Try again</button> : <button className="button primary" onClick={() => setModal('network')}><Plus size={16} /> Create network</button>}</section> : <>
+      {!selected ? <section className="welcome">{networksLoading ? <div className="loading-line" role="status"><span className="live-dot" />Loading networks…</div> : <><div className="welcome-orb"><Globe2 size={28} /></div><span className="eyebrow">PEERIMETER DASHBOARD</span><h1>{networksLoadFailed ? 'Could not load networks.' : 'Start with a network.'}</h1><p>{networksLoadFailed ? 'Try refreshing the service data.' : 'Create your first private network, then invite peers from any platform.'}</p>{networksLoadFailed ? <button className="button primary" onClick={() => void refresh()}><RefreshCw size={16} /> Try again</button> : <button className="button primary" onClick={() => setModal('network')}><Plus size={16} /> Create network</button>}</>}</section> : <>
         <section className="page-heading"><div><div className="eyebrow">NETWORK OVERVIEW <span className="heading-dot">/</span> {selected.id}</div><h1>{selected.name}</h1><p>Manage the peers connected to this network.</p></div><button className="button primary" onClick={() => void showJoin()}><Plus size={16} /> Add a peer</button></section>
         <section className="stats-grid">
           <Stat icon={<Users size={17} />} label="Connected peers" value={peersLoading ? '…' : String(peers.length)} hint={peersLoading ? 'Loading network peers' : 'Registered on this network'} />
@@ -265,7 +277,7 @@ export function App() {
           <Stat icon={<Activity size={17} />} label="Network status" value="Active" hint="Service API reachable" active />
         </section>
         <section className="content-card">
-          <div className="card-heading"><div><h2>Peers <span className="count-badge">{peers.length}</span></h2><p>Registered devices in {selected.name}</p></div><div className="table-actions"><label className="search-box"><Search size={15} /><input placeholder="Search peers" value={search} onChange={(e) => setSearch(e.target.value)} /></label><button className="button secondary compact" onClick={() => void showJoin()}><Plus size={15} /> Add peer</button></div></div>
+          <div className="card-heading"><div><h2>Peers <span className="count-badge">{peersLoading ? '…' : peers.length}</span></h2><p>Registered devices in {selected.name}</p></div><div className="table-actions"><label className="search-box"><Search size={15} /><input placeholder="Search peers" value={search} onChange={(e) => setSearch(e.target.value)} /></label><button className="button secondary compact" onClick={() => void showJoin()}><Plus size={15} /> Add peer</button></div></div>
           {peersLoading ? <div className="loading-line" role="status"><span className="live-dot" />Loading peers…</div> : peersLoadFailed ? <div className="empty-state"><div className="empty-icon"><Cpu size={21} /></div><h3>Could not load peers</h3><p>Refresh the network data and try again.</p><button className="button primary" onClick={() => void refresh()}><RefreshCw size={15} /> Try again</button></div> : peers.length === 0 ? <div className="empty-state"><div className="empty-icon"><Cpu size={21} /></div><h3>No peers connected yet</h3><p>Add a peer to get its install and join commands.</p><button className="button primary" onClick={() => void showJoin()}><Plus size={15} /> Add a peer</button></div> : <div className="table-wrap"><table><thead><tr><th>PEER</th><th>TUNNEL ADDRESS</th><th>ENDPOINT</th><th>LISTEN PORT</th><th></th></tr></thead><tbody>{filteredPeers.map((peer) => <tr key={peer.node_id} onClick={() => void openPeer(peer)}><td><div className="peer-name"><span className="peer-avatar"><Cpu size={15} /></span><span><b>{peerNames[peer.node_id] || peer.node_id}</b><small>{shortKey(peer.public_key)}</small></span></div></td><td><code>{peer.tunnel_address ?? '—'}</code></td><td><span className="endpoint"><i />{peer.public_endpoint || `${peer.local_addresses?.[0] ?? 'No address'}`}</span></td><td>{peer.listen_port ?? '—'}</td><td><button className="row-action" aria-label={`Edit ${peer.node_id}`}><ChevronRight size={16} /></button></td></tr>)}</tbody></table>{filteredPeers.length === 0 && <div className="no-results">No peers match “{search}”.</div>}</div>}
         </section>
         <footer className="page-footer"><span><Shield size={13} /> Direct WireGuard mesh · No relay</span><span>Peerimeter Service API</span></footer>
