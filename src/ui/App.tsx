@@ -38,6 +38,7 @@ export function App() {
   const [showJoinToken, setShowJoinToken] = useState(false)
   const [copied, setCopied] = useState('')
   const peerLoadID = useRef(0)
+  const peerNameLoadID = useRef(0)
   const peerConfigLoadID = useRef(0)
   const joinLoadID = useRef(0)
 
@@ -47,6 +48,7 @@ export function App() {
 
   async function loadPeers(client: ServiceAPI, networkID: string, isCurrent = () => true) {
     const requestID = ++peerLoadID.current
+    const nameRequestID = ++peerNameLoadID.current
     setPeers([]); setPeerNames({})
     if (!networkID) return
     try {
@@ -59,7 +61,7 @@ export function App() {
           return [peer.node_id, String(config?.name || peer.node_id)] as const
         } catch { return [peer.node_id, peer.node_id] as const }
       }))
-      if (requestID === peerLoadID.current && isCurrent()) setPeerNames(Object.fromEntries(names))
+      if (requestID === peerLoadID.current && nameRequestID === peerNameLoadID.current && isCurrent()) setPeerNames(Object.fromEntries(names))
     } catch (cause) {
       if (requestID === peerLoadID.current && isCurrent()) setError(cause instanceof Error ? cause.message : 'Could not load peers')
     }
@@ -172,6 +174,7 @@ export function App() {
     setBusy(true); setError('')
     try {
       await api.savePeerConfig(selectedID, active.node_id, config)
+      peerNameLoadID.current++
       setPeerConfig(config); setPeerNames((previous) => ({ ...previous, [active.node_id]: String(config.name) })); setModal(null); setNotice('Peer details saved')
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not save peer') }
     finally { setBusy(false) }
