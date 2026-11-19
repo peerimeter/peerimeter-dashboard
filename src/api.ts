@@ -74,7 +74,7 @@ export class ServiceAPI {
     return response.json() as Promise<T>
   }
 
-  async verify(): Promise<void> { await this.request('/api/v1/networks') }
+  async verify(): Promise<Network[]> { return this.networks() }
   async networks(): Promise<Network[]> {
     const result = await this.request<{ networks: Record<string, Network> }>('/api/v1/networks')
     return Object.values(result.networks ?? {}).sort((a, b) => a.name.localeCompare(b.name))
