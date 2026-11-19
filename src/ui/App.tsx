@@ -25,6 +25,8 @@ export function App() {
   const [networks, setNetworks] = useState<Network[]>([])
   const [selectedID, setSelectedID] = useState('')
   const [peers, setPeers] = useState<Peer[]>([])
+  const [peersLoading, setPeersLoading] = useState(false)
+  const [peersLoadFailed, setPeersLoadFailed] = useState(false)
   const [peerNames, setPeerNames] = useState<Record<string, string>>({})
   const [active, setActive] = useState<Peer | null>(null)
   const [search, setSearch] = useState('')
@@ -50,11 +52,13 @@ export function App() {
     const requestID = ++peerLoadID.current
     const nameEditSnapshot = { ...peerNameEditID.current }
     setPeers([]); setPeerNames({})
+    setPeersLoading(Boolean(networkID)); setPeersLoadFailed(false)
     if (!networkID) return
     try {
       const nextPeers = await client.peers(networkID)
       if (requestID !== peerLoadID.current || !isCurrent()) return
       setPeers(nextPeers)
+      setPeersLoading(false)
       const names = await Promise.all(nextPeers.map(async (peer) => {
         try {
           const config = await client.peerConfig(networkID, peer.node_id)
@@ -68,7 +72,10 @@ export function App() {
         }))
       }
     } catch (cause) {
-      if (requestID === peerLoadID.current && isCurrent()) setError(cause instanceof Error ? cause.message : 'Could not load peers')
+      if (requestID === peerLoadID.current && isCurrent()) {
+        setPeersLoading(false); setPeersLoadFailed(true)
+        setError(cause instanceof Error ? cause.message : 'Could not load peers')
+      }
     }
   }
 
@@ -76,6 +83,7 @@ export function App() {
     if (!client) return
     peerLoadID.current++
     setPeers([]); setPeerNames({})
+    setPeersLoading(true); setPeersLoadFailed(false)
     setBusy(true); setError('')
     try {
       const items = knownNetworks ?? await client.networks()
@@ -84,7 +92,12 @@ export function App() {
       const nextID = items.some((network) => network.id === networkID) ? networkID : items[0]?.id ?? ''
       setSelectedID(nextID)
       void loadPeers(client, nextID, isCurrent)
-    } catch (cause) { if (isCurrent()) setError(cause instanceof Error ? cause.message : 'Could not load service data') }
+    } catch (cause) {
+      if (isCurrent()) {
+        setPeersLoading(false); setPeersLoadFailed(true)
+        setError(cause instanceof Error ? cause.message : 'Could not load service data')
+      }
+    }
     finally { if (isCurrent()) setBusy(false) }
   }
 
@@ -142,7 +155,7 @@ export function App() {
 
   async function selectNetwork(id: string) {
     setSelectedID(id); setActive(null); setJoinToken(''); setShowJoinToken(false); setError(''); joinLoadID.current++
-    if (!api || !id) { setPeers([]); setPeerNames({}); return }
+    if (!api || !id) { setPeers([]); setPeerNames({}); setPeersLoading(false); setPeersLoadFailed(false); return }
     setBusy(true)
     try { await loadPeers(api, id) }
     finally { setBusy(false) }
@@ -201,7 +214,7 @@ export function App() {
 
   function signOut() {
     peerLoadID.current++; peerConfigLoadID.current++; joinLoadID.current++
-    sessionStorage.removeItem('peerimeter.session'); setAPI(null); setNetworks([]); setPeers([]); setPeerNames({}); setSelectedID(''); setActive(null); setJoinToken(''); setShowJoinToken(false); setPeerConfig({}); setPeerConfigLoaded(false)
+    sessionStorage.removeItem('peerimeter.session'); setAPI(null); setNetworks([]); setPeers([]); setPeersLoading(false); setPeersLoadFailed(false); setPeerNames({}); setSelectedID(''); setActive(null); setJoinToken(''); setShowJoinToken(false); setPeerConfig({}); setPeerConfigLoaded(false)
     setCredentials({ url: defaultServiceURL(configuredServiceURL, location.origin), key: '' })
   }
 
@@ -239,13 +252,13 @@ export function App() {
       {!selected ? <section className="welcome"><div className="welcome-orb"><Globe2 size={28} /></div><span className="eyebrow">PEERIMETER DASHBOARD</span><h1>Start with a network.</h1><p>Create your first private network, then invite peers from any platform.</p><button className="button primary" onClick={() => setModal('network')}><Plus size={16} /> Create network</button></section> : <>
         <section className="page-heading"><div><div className="eyebrow">NETWORK OVERVIEW <span className="heading-dot">/</span> {selected.id}</div><h1>{selected.name}</h1><p>Manage the peers connected to this network.</p></div><button className="button primary" onClick={() => void showJoin()}><Plus size={16} /> Add a peer</button></section>
         <section className="stats-grid">
-          <Stat icon={<Users size={17} />} label="Connected peers" value={String(peers.length)} hint="Registered on this network" />
+          <Stat icon={<Users size={17} />} label="Connected peers" value={peersLoading ? '…' : String(peers.length)} hint={peersLoading ? 'Loading network peers' : 'Registered on this network'} />
           <Stat icon={<Globe2 size={17} />} label="Network range" value={selected.cidr} hint="Private IPv4 address space" />
           <Stat icon={<Activity size={17} />} label="Network status" value="Active" hint="Service API reachable" active />
         </section>
         <section className="content-card">
           <div className="card-heading"><div><h2>Peers <span className="count-badge">{peers.length}</span></h2><p>Registered devices in {selected.name}</p></div><div className="table-actions"><label className="search-box"><Search size={15} /><input placeholder="Search peers" value={search} onChange={(e) => setSearch(e.target.value)} /></label><button className="button secondary compact" onClick={() => void showJoin()}><Plus size={15} /> Add peer</button></div></div>
-          {peers.length === 0 ? <div className="empty-state"><div className="empty-icon"><Cpu size={21} /></div><h3>No peers connected yet</h3><p>Add a peer to get its install and join commands.</p><button className="button primary" onClick={() => void showJoin()}><Plus size={15} /> Add a peer</button></div> : <div className="table-wrap"><table><thead><tr><th>PEER</th><th>TUNNEL ADDRESS</th><th>ENDPOINT</th><th>LISTEN PORT</th><th></th></tr></thead><tbody>{filteredPeers.map((peer) => <tr key={peer.node_id} onClick={() => void openPeer(peer)}><td><div className="peer-name"><span className="peer-avatar"><Cpu size={15} /></span><span><b>{peerNames[peer.node_id] || peer.node_id}</b><small>{shortKey(peer.public_key)}</small></span></div></td><td><code>{peer.tunnel_address ?? '—'}</code></td><td><span className="endpoint"><i />{peer.public_endpoint || `${peer.local_addresses?.[0] ?? 'No address'}`}</span></td><td>{peer.listen_port ?? '—'}</td><td><button className="row-action" aria-label={`Edit ${peer.node_id}`}><ChevronRight size={16} /></button></td></tr>)}</tbody></table>{filteredPeers.length === 0 && <div className="no-results">No peers match “{search}”.</div>}</div>}
+          {peersLoading ? <div className="empty-state" role="status"><div className="empty-icon"><Cpu size={21} /></div><h3>Loading peers…</h3><p>Fetching registered devices for this network.</p></div> : peersLoadFailed ? <div className="empty-state"><div className="empty-icon"><Cpu size={21} /></div><h3>Could not load peers</h3><p>Refresh the network data and try again.</p><button className="button primary" onClick={() => void refresh()}><RefreshCw size={15} /> Try again</button></div> : peers.length === 0 ? <div className="empty-state"><div className="empty-icon"><Cpu size={21} /></div><h3>No peers connected yet</h3><p>Add a peer to get its install and join commands.</p><button className="button primary" onClick={() => void showJoin()}><Plus size={15} /> Add a peer</button></div> : <div className="table-wrap"><table><thead><tr><th>PEER</th><th>TUNNEL ADDRESS</th><th>ENDPOINT</th><th>LISTEN PORT</th><th></th></tr></thead><tbody>{filteredPeers.map((peer) => <tr key={peer.node_id} onClick={() => void openPeer(peer)}><td><div className="peer-name"><span className="peer-avatar"><Cpu size={15} /></span><span><b>{peerNames[peer.node_id] || peer.node_id}</b><small>{shortKey(peer.public_key)}</small></span></div></td><td><code>{peer.tunnel_address ?? '—'}</code></td><td><span className="endpoint"><i />{peer.public_endpoint || `${peer.local_addresses?.[0] ?? 'No address'}`}</span></td><td>{peer.listen_port ?? '—'}</td><td><button className="row-action" aria-label={`Edit ${peer.node_id}`}><ChevronRight size={16} /></button></td></tr>)}</tbody></table>{filteredPeers.length === 0 && <div className="no-results">No peers match “{search}”.</div>}</div>}
         </section>
         <footer className="page-footer"><span><Shield size={13} /> Direct WireGuard mesh · No relay</span><span>Peerimeter Service API</span></footer>
       </>}
