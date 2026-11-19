@@ -38,7 +38,7 @@ export function App() {
   const [showJoinToken, setShowJoinToken] = useState(false)
   const [copied, setCopied] = useState('')
   const peerLoadID = useRef(0)
-  const peerNameLoadID = useRef(0)
+  const peerNameEditID = useRef<Record<string, number>>({})
   const peerConfigLoadID = useRef(0)
   const joinLoadID = useRef(0)
 
@@ -48,7 +48,7 @@ export function App() {
 
   async function loadPeers(client: ServiceAPI, networkID: string, isCurrent = () => true) {
     const requestID = ++peerLoadID.current
-    const nameRequestID = ++peerNameLoadID.current
+    const nameEditSnapshot = { ...peerNameEditID.current }
     setPeers([]); setPeerNames({})
     if (!networkID) return
     try {
@@ -61,19 +61,24 @@ export function App() {
           return [peer.node_id, String(config?.name || peer.node_id)] as const
         } catch { return [peer.node_id, peer.node_id] as const }
       }))
-      if (requestID === peerLoadID.current && nameRequestID === peerNameLoadID.current && isCurrent()) setPeerNames(Object.fromEntries(names))
+      if (requestID === peerLoadID.current && isCurrent()) {
+        setPeerNames((previous) => ({
+          ...previous,
+          ...Object.fromEntries(names.filter(([nodeID]) => (peerNameEditID.current[nodeID] ?? 0) === (nameEditSnapshot[nodeID] ?? 0))),
+        }))
+      }
     } catch (cause) {
       if (requestID === peerLoadID.current && isCurrent()) setError(cause instanceof Error ? cause.message : 'Could not load peers')
     }
   }
 
-  async function refresh(client = api, networkID = selectedID, isCurrent = () => true) {
+  async function refresh(client = api, networkID = selectedID, isCurrent = () => true, knownNetworks?: Network[]) {
     if (!client) return
     peerLoadID.current++
     setPeers([]); setPeerNames({})
     setBusy(true); setError('')
     try {
-      const items = await client.networks()
+      const items = knownNetworks ?? await client.networks()
       if (!isCurrent()) return
       setNetworks(items)
       const nextID = items.some((network) => network.id === networkID) ? networkID : items[0]?.id ?? ''
@@ -100,9 +105,9 @@ export function App() {
       setBusy(false)
       setCheckingSession(false)
     }, SESSION_RESTORE_TIMEOUT_MS)
-    client.verify().then(async () => {
+    client.verify().then(async (items) => {
       if (!restoreActive) return
-      await refresh(client, '', () => restoreActive)
+      await refresh(client, '', () => restoreActive, items)
       if (!restoreActive) return
       setAPI(client)
       setCheckingSession(false)
@@ -174,7 +179,7 @@ export function App() {
     setBusy(true); setError('')
     try {
       await api.savePeerConfig(selectedID, active.node_id, config)
-      peerNameLoadID.current++
+      peerNameEditID.current = { ...peerNameEditID.current, [active.node_id]: (peerNameEditID.current[active.node_id] ?? 0) + 1 }
       setPeerConfig(config); setPeerNames((previous) => ({ ...previous, [active.node_id]: String(config.name) })); setModal(null); setNotice('Peer details saved')
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not save peer') }
     finally { setBusy(false) }
