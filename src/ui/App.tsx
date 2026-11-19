@@ -167,12 +167,14 @@ export function App() {
 
   async function selectNetwork(id: string) {
     refreshLoadID.current++
+    const requestSessionID = sessionID.current
     setNetworksLoading(false)
     setSelectedID(id); setActive(null); setJoinToken(''); setShowJoinToken(false); setError(''); joinLoadID.current++
     if (!api || !id) { setPeers([]); setPeerNames({}); setPeersLoading(false); setPeersLoadFailed(false); return }
+    const client = api
     setBusy(true)
-    try { await loadPeers(api, id) }
-    finally { setBusy(false) }
+    try { await loadPeers(client, id, () => sessionID.current === requestSessionID) }
+    finally { if (sessionID.current === requestSessionID) setBusy(false) }
   }
 
   async function openPeer(peer: Peer) {
