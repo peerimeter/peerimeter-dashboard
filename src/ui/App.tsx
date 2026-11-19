@@ -16,6 +16,10 @@ const shortKey = (key: string) => key ? `${key.slice(0, 10)}…${key.slice(-6)}`
 export function App() {
   const [credentials, setCredentials] = useState(saved)
   const [serviceURLs, setServiceURLs] = useState(() => savedServiceURLs(configuredServiceURL, location.origin))
+  const [checkingSession, setCheckingSession] = useState(() => {
+    const current = saved()
+    return Boolean(current.key && current.url)
+  })
   const [api, setAPI] = useState<ServiceAPI | null>(null)
   const [networks, setNetworks] = useState<Network[]>([])
   const [selectedID, setSelectedID] = useState('')
@@ -78,11 +82,19 @@ export function App() {
   useEffect(() => {
     const current = saved()
     setCredentials(current)
-    if (!current.key || !current.url) return
+    if (!current.key || !current.url) {
+      setCheckingSession(false)
+      return
+    }
     const client = new ServiceAPI(current.url, current.key)
-    client.verify().then(() => { setAPI(client); void refresh(client) }).catch(() => {
+    client.verify().then(() => {
+      setAPI(client)
+      setCheckingSession(false)
+      void refresh(client)
+    }).catch(() => {
       sessionStorage.removeItem('peerimeter.session')
       setCredentials({ url: current.url, key: '' })
+      setCheckingSession(false)
     })
   }, [])
 
@@ -163,6 +175,8 @@ export function App() {
     sessionStorage.removeItem('peerimeter.session'); setAPI(null); setNetworks([]); setPeers([]); setPeerNames({}); setSelectedID(''); setActive(null); setJoinToken(''); setShowJoinToken(false); setPeerConfig({}); setPeerConfigLoaded(false)
     setCredentials({ url: defaultServiceURL(configuredServiceURL, location.origin), key: '' })
   }
+
+  if (checkingSession) return <main className="login-page"><div className="loading-line"><span className="live-dot" />Restoring your session…</div></main>
 
   if (!api) return <main className="login-page">
     <div className="login-card">
