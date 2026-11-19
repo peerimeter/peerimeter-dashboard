@@ -4,6 +4,7 @@ import { defaultServiceURL, joinCommands, rememberServiceURL, savedServiceURLs, 
 import type { Network, Peer } from '../api'
 
 type Credentials = { url: string; key: string }
+const SESSION_RESTORE_TIMEOUT_MS = 8_000
 const configuredServiceURL = import.meta.env.VITE_SERVICE_URL
 const saved = (): Credentials => {
   const defaultURL = defaultServiceURL(configuredServiceURL, location.origin)
@@ -87,14 +88,27 @@ export function App() {
       return
     }
     const client = new ServiceAPI(current.url, current.key)
+    let restoreActive = true
+    const timeoutID = window.setTimeout(() => {
+      restoreActive = false
+      sessionStorage.removeItem('peerimeter.session')
+      setCredentials({ url: current.url, key: '' })
+      setError('Could not restore your session. Please sign in again.')
+      setCheckingSession(false)
+    }, SESSION_RESTORE_TIMEOUT_MS)
     client.verify().then(() => {
+      if (!restoreActive) return
       setAPI(client)
       setCheckingSession(false)
       void refresh(client)
     }).catch(() => {
+      if (!restoreActive) return
       sessionStorage.removeItem('peerimeter.session')
       setCredentials({ url: current.url, key: '' })
+      setError('Could not restore your session. Please sign in again.')
       setCheckingSession(false)
+    }).finally(() => {
+      window.clearTimeout(timeoutID)
     })
   }, [])
 
