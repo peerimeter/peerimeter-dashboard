@@ -27,6 +27,7 @@ export function App() {
   const [peers, setPeers] = useState<Peer[]>([])
   const [peersLoading, setPeersLoading] = useState(false)
   const [peersLoadFailed, setPeersLoadFailed] = useState(false)
+  const [networksLoadFailed, setNetworksLoadFailed] = useState(false)
   const [peerNames, setPeerNames] = useState<Record<string, string>>({})
   const [active, setActive] = useState<Peer | null>(null)
   const [search, setSearch] = useState('')
@@ -87,6 +88,7 @@ export function App() {
     peerLoadID.current++
     setPeers([]); setPeerNames({})
     setPeersLoading(true); setPeersLoadFailed(false)
+    setNetworksLoadFailed(false)
     setBusy(true); setError('')
     try {
       const items = knownNetworks ?? await client.networks()
@@ -98,6 +100,7 @@ export function App() {
     } catch (cause) {
       if (isRefreshCurrent()) {
         setPeersLoading(false); setPeersLoadFailed(true)
+        setNetworksLoadFailed(true)
         setError(cause instanceof Error ? cause.message : 'Could not load service data')
       }
     }
@@ -218,7 +221,8 @@ export function App() {
 
   function signOut() {
     refreshLoadID.current++; peerLoadID.current++; peerConfigLoadID.current++; joinLoadID.current++
-    sessionStorage.removeItem('peerimeter.session'); setAPI(null); setNetworks([]); setPeers([]); setPeersLoading(false); setPeersLoadFailed(false); setPeerNames({}); setSelectedID(''); setActive(null); setJoinToken(''); setShowJoinToken(false); setPeerConfig({}); setPeerConfigLoaded(false)
+    sessionStorage.removeItem('peerimeter.session'); setAPI(null); setNetworks([]); setPeers([]); setPeersLoading(false); setPeersLoadFailed(false); setNetworksLoadFailed(false); setPeerNames({}); setSelectedID(''); setActive(null); setJoinToken(''); setShowJoinToken(false); setPeerConfig({}); setPeerConfigLoaded(false)
+    setBusy(false)
     setCredentials({ url: defaultServiceURL(configuredServiceURL, location.origin), key: '' })
   }
 
@@ -253,7 +257,7 @@ export function App() {
       <header className="topbar"><div className="breadcrumbs"><span>Networks</span>{selected && <><ChevronRight size={13} /><strong>{selected.name}</strong></>}</div><div className="top-actions"><span className="secure-pill"><span className="live-dot" /> API connected</span><button className="icon-button" title="Refresh" onClick={() => void refresh()}><RefreshCw size={16} className={busy ? 'spin' : ''} /></button><div className="avatar">P</div></div></header>
       {error && <div className="alert error-alert"><span>{error}</span><button onClick={() => setError('')}><X size={15} /></button></div>}
       {notice && <div className="alert success-alert"><Check size={15} /><span>{notice}</span><button onClick={() => setNotice('')}><X size={15} /></button></div>}
-      {!selected ? <section className="welcome"><div className="welcome-orb"><Globe2 size={28} /></div><span className="eyebrow">PEERIMETER DASHBOARD</span><h1>Start with a network.</h1><p>Create your first private network, then invite peers from any platform.</p><button className="button primary" onClick={() => setModal('network')}><Plus size={16} /> Create network</button></section> : <>
+      {!selected ? <section className="welcome"><div className="welcome-orb"><Globe2 size={28} /></div><span className="eyebrow">PEERIMETER DASHBOARD</span><h1>{networksLoadFailed ? 'Could not load networks.' : 'Start with a network.'}</h1><p>{networksLoadFailed ? 'Try refreshing the service data.' : 'Create your first private network, then invite peers from any platform.'}</p>{networksLoadFailed ? <button className="button primary" onClick={() => void refresh()}><RefreshCw size={16} /> Try again</button> : <button className="button primary" onClick={() => setModal('network')}><Plus size={16} /> Create network</button>}</section> : <>
         <section className="page-heading"><div><div className="eyebrow">NETWORK OVERVIEW <span className="heading-dot">/</span> {selected.id}</div><h1>{selected.name}</h1><p>Manage the peers connected to this network.</p></div><button className="button primary" onClick={() => void showJoin()}><Plus size={16} /> Add a peer</button></section>
         <section className="stats-grid">
           <Stat icon={<Users size={17} />} label="Connected peers" value={peersLoading ? '…' : String(peers.length)} hint={peersLoading ? 'Loading network peers' : 'Registered on this network'} />
