@@ -30,3 +30,15 @@ td{font-size:12px}
 .join-token-masked{color:#8a8294;letter-spacing:.16em;user-select:none}
 .join-token-actions .icon-button{flex:0 0 33px}
 .join-token-actions .copy-button{flex:0 0 auto}
+/* Keep long network ranges and peer controls inside narrow cards. */
+.stat-value{min-width:0;overflow-wrap:anywhere;font-size:clamp(16px,1.5vw,21px)}
+@media(max-width:680px){
+  .card-heading>div:first-child{width:100%}
+  .table-actions{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+  .search-box{width:auto;min-width:0}
+  .table-actions .button{white-space:nowrap}
+}
+@media(max-width:420px){
+  .stats-grid{grid-template-columns:minmax(0,1fr)}
+  .stat-card,.stat-card:last-child{grid-column:auto;min-height:96px}
+}
