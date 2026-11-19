@@ -88,11 +88,13 @@ export function App() {
 
   async function signIn(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError('')
-    const client = new ServiceAPI(credentials.url, credentials.key)
+    const signedInCredentials = { ...credentials, url: credentials.url.trim() }
+    const client = new ServiceAPI(signedInCredentials.url, signedInCredentials.key)
     try {
       await client.verify()
-      sessionStorage.setItem('peerimeter.session', JSON.stringify(credentials))
-      setServiceURLs([...new Set([...savedServiceURLs(configuredServiceURL, location.origin), ...rememberServiceURL(credentials.url)])])
+      sessionStorage.setItem('peerimeter.session', JSON.stringify(signedInCredentials))
+      setCredentials(signedInCredentials)
+      setServiceURLs([...new Set([...savedServiceURLs(configuredServiceURL, location.origin), ...rememberServiceURL(signedInCredentials.url)])])
       setAPI(client); await refresh(client, '')
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not connect to Peerimeter Service') }
     finally { setBusy(false) }
