@@ -45,13 +45,13 @@ export function App() {
   const filteredPeers = peers.filter((peer) => `${peerNames[peer.node_id] ?? ''} ${peer.node_id} ${peer.tunnel_address ?? ''} ${peer.public_key}`.toLowerCase().includes(search.toLowerCase()))
   const join = useMemo(() => joinToken && selected ? joinCommands() : null, [joinToken, selected])
 
-  async function loadPeers(client: ServiceAPI, networkID: string) {
+  async function loadPeers(client: ServiceAPI, networkID: string, isCurrent = () => true) {
     const requestID = ++peerLoadID.current
     setPeers([]); setPeerNames({})
     if (!networkID) return
     try {
       const nextPeers = await client.peers(networkID)
-      if (requestID !== peerLoadID.current) return
+      if (requestID !== peerLoadID.current || !isCurrent()) return
       setPeers(nextPeers)
       const names = await Promise.all(nextPeers.map(async (peer) => {
         try {
@@ -59,25 +59,26 @@ export function App() {
           return [peer.node_id, String(config?.name || peer.node_id)] as const
         } catch { return [peer.node_id, peer.node_id] as const }
       }))
-      if (requestID === peerLoadID.current) setPeerNames(Object.fromEntries(names))
+      if (requestID === peerLoadID.current && isCurrent()) setPeerNames(Object.fromEntries(names))
     } catch (cause) {
-      if (requestID === peerLoadID.current) setError(cause instanceof Error ? cause.message : 'Could not load peers')
+      if (requestID === peerLoadID.current && isCurrent()) setError(cause instanceof Error ? cause.message : 'Could not load peers')
     }
   }
 
-  async function refresh(client = api, networkID = selectedID) {
+  async function refresh(client = api, networkID = selectedID, isCurrent = () => true) {
     if (!client) return
     peerLoadID.current++
     setPeers([]); setPeerNames({})
     setBusy(true); setError('')
     try {
       const items = await client.networks()
+      if (!isCurrent()) return
       setNetworks(items)
       const nextID = items.some((network) => network.id === networkID) ? networkID : items[0]?.id ?? ''
       setSelectedID(nextID)
-      await loadPeers(client, nextID)
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not load service data') }
-    finally { setBusy(false) }
+      void loadPeers(client, nextID, isCurrent)
+    } catch (cause) { if (isCurrent()) setError(cause instanceof Error ? cause.message : 'Could not load service data') }
+    finally { if (isCurrent()) setBusy(false) }
   }
 
   useEffect(() => {
@@ -94,11 +95,12 @@ export function App() {
       sessionStorage.removeItem('peerimeter.session')
       setCredentials({ url: current.url, key: '' })
       setError('Could not restore your session. Please sign in again.')
+      setBusy(false)
       setCheckingSession(false)
     }, SESSION_RESTORE_TIMEOUT_MS)
     client.verify().then(async () => {
       if (!restoreActive) return
-      await refresh(client)
+      await refresh(client, '', () => restoreActive)
       if (!restoreActive) return
       setAPI(client)
       setCheckingSession(false)
