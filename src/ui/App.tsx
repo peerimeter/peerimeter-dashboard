@@ -25,6 +25,7 @@ export function App() {
   })
   const [api, setAPI] = useState<ServiceAPI | null>(null)
   const [networks, setNetworks] = useState<Network[]>([])
+  const [serviceVersion, setServiceVersion] = useState('')
   const [selectedID, setSelectedID] = useState('')
   const [peers, setPeers] = useState<Peer[]>([])
   const [peersLoading, setPeersLoading] = useState(false)
@@ -97,6 +98,9 @@ export function App() {
     setNetworksLoading(true)
     setBusy(true); setError('')
     try {
+      const currentVersion = await client.version().catch(() => '')
+      if (!isRefreshCurrent()) return
+      setServiceVersion(currentVersion)
       const items = knownNetworks ?? await client.networks()
       if (!isRefreshCurrent()) return
       setNetworksLoading(false); setNetworksLoadFailed(false)
@@ -253,7 +257,7 @@ export function App() {
 
   function signOut() {
     sessionID.current++; refreshLoadID.current++; peerLoadID.current++; peerConfigLoadID.current++; joinLoadID.current++
-    sessionStorage.removeItem(SESSION_STORAGE_KEY); setAPI(null); setNetworks([]); setPeers([]); setPeersLoading(false); setPeersLoadFailed(false); setNetworksLoading(false); setNetworksLoadFailed(false); setPeerNames({}); setSelectedID(''); setActive(null); setJoinToken(''); setShowJoinToken(false); setPeerConfig({ version: 1 }); setPeerConfigLoaded(false)
+    sessionStorage.removeItem(SESSION_STORAGE_KEY); setAPI(null); setServiceVersion(''); setNetworks([]); setPeers([]); setPeersLoading(false); setPeersLoadFailed(false); setNetworksLoading(false); setNetworksLoadFailed(false); setPeerNames({}); setSelectedID(''); setActive(null); setJoinToken(''); setShowJoinToken(false); setPeerConfig({ version: 1 }); setPeerConfigLoaded(false)
     setBusy(false)
     setCredentials({ url: defaultServiceURL(configuredServiceURL, location.origin), key: '' })
   }
@@ -263,7 +267,7 @@ export function App() {
   if (!api) return <LoginScreen credentials={credentials} serviceURLs={serviceURLs} error={error} busy={busy} onCredentialsChange={setCredentials} onSubmit={signIn} />
 
   return <div className="app-shell">
-    <Sidebar api={api} networks={networks} selectedID={selectedID} loading={networksLoading} failed={networksLoadFailed} onCreateNetwork={openNetworkModal} onSelectNetwork={(id) => void selectNetwork(id)} onSignOut={signOut} />
+    <Sidebar api={api} serviceVersion={serviceVersion} networks={networks} selectedID={selectedID} loading={networksLoading} failed={networksLoadFailed} onCreateNetwork={openNetworkModal} onSelectNetwork={(id) => void selectNetwork(id)} onSignOut={signOut} />
     <main className="main-panel">
       <header className="topbar"><div className="breadcrumbs"><span>Networks</span>{selected && <><ChevronRight size={13} /><strong>{selected.name}</strong></>}</div><div className="top-actions"><span className="secure-pill"><span className="live-dot" /> API connected</span><button className="icon-button" title="Refresh" onClick={() => void refresh()}><RefreshCw size={16} className={busy ? 'spin' : ''} /></button><div className="avatar">P</div></div></header>
       {error && <div className="alert error-alert"><span>{error}</span><button onClick={() => setError('')}><X size={15} /></button></div>}
@@ -276,7 +280,7 @@ export function App() {
           <Stat icon={<Activity size={17} />} label="Network status" value="Active" hint="Service API reachable" active />
         </section>
         <PeersTableSection selected={selected} peers={peers} peerNames={peerNames} filteredPeers={filteredPeers} peersLoading={peersLoading} peersLoadFailed={peersLoadFailed} peerCountLabel={peerCountLabel} search={search} onSearch={setSearch} onRefresh={() => void refresh()} onJoin={() => void showJoin()} onOpenPeer={(peer) => void openPeer(peer)} />
-        <footer className="page-footer"><span><Shield size={13} /> Direct WireGuard mesh · No relay</span><span>Peerimeter Service API</span></footer>
+        <footer className="page-footer"><span><Shield size={13} /> Direct WireGuard mesh · No relay</span><span>Peerimeter Service {serviceVersion || 'version unavailable'}</span></footer>
       </>}
     </main>
 
@@ -331,8 +335,9 @@ function LoginScreen({ credentials, serviceURLs, error, busy, onCredentialsChang
   </main>
 }
 
-function Sidebar({ api, networks, selectedID, loading, failed, onCreateNetwork, onSelectNetwork, onSignOut }: {
+function Sidebar({ api, serviceVersion, networks, selectedID, loading, failed, onCreateNetwork, onSelectNetwork, onSignOut }: {
   api: ServiceAPI
+  serviceVersion: string
   networks: Network[]
   selectedID: string
   loading: boolean
@@ -344,7 +349,7 @@ function Sidebar({ api, networks, selectedID, loading, failed, onCreateNetwork, 
   return <aside className="sidebar">
     <Brand />
     <div className="side-label">WORKSPACE</div>
-    <div className="service-tag"><span className="live-dot" /><span><b>Service connected</b><small>{new URL(api.baseURL).host}</small></span></div>
+    <div className="service-tag"><span className="live-dot" /><span><b>Service {serviceVersion || 'version unavailable'}</b><small>{new URL(api.baseURL).host}</small></span></div>
     <div className="side-label network-label">NETWORKS <button aria-label="Create network" onClick={onCreateNetwork}><Plus size={15} /></button></div>
     <nav className="network-list">
       {networks.map((network) => <button key={network.id} className={selectedID === network.id ? 'network-nav active' : 'network-nav'} onClick={() => onSelectNetwork(network.id)}>
@@ -410,10 +415,10 @@ function PeersTableSection({ selected, peers, peerNames, filteredPeers, peersLoa
 
 function PeerTableSkeleton() {
   return <div className="table-wrap peer-skeleton" role="status" aria-label="Loading peers">
-    <table aria-hidden="true"><thead><tr><th>PEER</th><th>TUNNEL ADDRESS</th><th>ENDPOINT</th><th>LISTEN PORT</th><th></th></tr></thead><tbody>
+    <table aria-hidden="true"><thead><tr><th>PEER</th><th>AGENT-CLI</th><th>TUNNEL ADDRESS</th><th>ENDPOINT</th><th>LISTEN PORT</th><th></th></tr></thead><tbody>
       {[0, 1, 2, 3].map((row) => <tr key={row}>
         <td><div className="peer-name"><span className="skeleton-avatar" /><span className="skeleton-copy"><span className="skeleton-bar skeleton-peer-title" /><span className="skeleton-bar skeleton-peer-subtitle" /></span></div></td>
-        <td><span className="skeleton-bar skeleton-address" /></td><td><span className="skeleton-bar skeleton-endpoint" /></td><td><span className="skeleton-bar skeleton-port" /></td><td><span className="skeleton-bar skeleton-action" /></td>
+        <td><span className="skeleton-bar skeleton-address" /></td><td><span className="skeleton-bar skeleton-address" /></td><td><span className="skeleton-bar skeleton-endpoint" /></td><td><span className="skeleton-bar skeleton-port" /></td><td><span className="skeleton-bar skeleton-action" /></td>
       </tr>)}
     </tbody></table>
   </div>
@@ -434,9 +439,10 @@ function PeerTable({ peers, peerNames, search, onOpenPeer }: {
   onOpenPeer: (peer: Peer) => void
 }) {
   return <div className="table-wrap">
-    <table><thead><tr><th>PEER</th><th>TUNNEL ADDRESS</th><th>ENDPOINT</th><th>LISTEN PORT</th><th></th></tr></thead><tbody>
+    <table><thead><tr><th>PEER</th><th>AGENT-CLI</th><th>TUNNEL ADDRESS</th><th>ENDPOINT</th><th>LISTEN PORT</th><th></th></tr></thead><tbody>
       {peers.map((peer) => <tr key={peer.node_id} onClick={() => onOpenPeer(peer)}>
         <td><div className="peer-name"><span className="peer-avatar"><Cpu size={15} /></span><span><b>{peerNames[peer.node_id] || peer.node_id}</b><small>{shortKey(peer.public_key)}</small></span></div></td>
+        <td>{peer.agent_cli_version ?? '—'}</td>
         <td><code>{peer.tunnel_address ?? '—'}</code></td>
         <td><span className="endpoint"><i />{peer.public_endpoint || peer.local_addresses?.[0] || 'No address'}</span></td>
         <td>{peer.listen_port ?? '—'}</td><td><button className="row-action" aria-label={`Edit ${peer.node_id}`}><ChevronRight size={16} /></button></td>
@@ -579,6 +585,6 @@ function CopyButton({ copied, label, copiedLabel = 'Copied', onCopy }: {
   return <button type="button" className="copy-button" onClick={onCopy}>{copied ? <Check size={14} /> : <Copy size={14} />}{copied ? copiedLabel : label}</button>
 }
 
-function Brand() { return <a className="brand" href="https://peerimeter.app/" aria-label="Peerimeter home"><span className="brand-icon">p<span>.</span></span><span>peerimeter<small>NETWORK DASHBOARD</small></span></a> }
+function Brand() { return <a className="brand" href="https://peerimeter.app/" aria-label={`Peerimeter home, dashboard commit ${__DASHBOARD_COMMIT__}`}><span className="brand-icon">p<span>.</span></span><span>peerimeter<small>NETWORK DASHBOARD · {__DASHBOARD_COMMIT__}</small></span></a> }
 function Stat({ icon, label, value, hint, active = false }: { icon: React.ReactNode; label: string; value: React.ReactNode; hint: string; active?: boolean }) { return <article className="stat-card"><div className="stat-icon">{icon}</div><span className="stat-label">{label}</span><strong className={active ? 'stat-value status-value' : 'stat-value'}>{active && <i />}{value}</strong><small>{hint}</small></article> }
 function ModalError({ error }: { error: string }) { return error ? <p className="error-text modal-error">{error}</p> : null }
