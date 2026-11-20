@@ -8,6 +8,61 @@ const SESSION_STORAGE_KEY = 'peerimeter.session'
 const COPY_RESET_MS = 1_800
 const SESSION_RESTORE_TIMEOUT_MS = 8_000
 const configuredServiceURL = import.meta.env.VITE_SERVICE_URL
+type RequestCounter = React.MutableRefObject<number>
+
+function beginRequest(counter: RequestCounter, sessionCounter?: RequestCounter) {
+  const requestID = ++counter.current
+  const requestSessionID = sessionCounter?.current
+  return () => counter.current === requestID
+    && (sessionCounter === undefined || sessionCounter.current === requestSessionID)
+}
+
+function useDashboardRequestState() {
+  return {
+    peerLoadID: useRef(0),
+    refreshLoadID: useRef(0),
+    serviceVersionLoadID: useRef(0),
+    sessionID: useRef(0),
+    peerNameEditID: useRef<Record<string, number>>({}),
+    peerConfigLoadID: useRef(0),
+    joinLoadID: useRef(0),
+  }
+}
+
+function useDashboardModal() {
+  const [active, setActive] = useState<Peer | null>(null)
+  const [modal, setModal] = useState<'network' | 'peer' | 'join' | null>(null)
+  const [peerConfig, setPeerConfig] = useState<PeerConfig>({ version: 1 })
+  const [peerConfigLoaded, setPeerConfigLoaded] = useState(false)
+  const [joinToken, setJoinToken] = useState('')
+  const [showJoinToken, setShowJoinToken] = useState(false)
+
+  function reset() {
+    setActive(null)
+    setModal(null)
+    setPeerConfig({ version: 1 })
+    setPeerConfigLoaded(false)
+    setJoinToken('')
+    setShowJoinToken(false)
+  }
+
+  return {
+    active,
+    setActive,
+    modal,
+    setModal,
+    peerConfig,
+    setPeerConfig,
+    peerConfigLoaded,
+    setPeerConfigLoaded,
+    joinToken,
+    setJoinToken,
+    showJoinToken,
+    setShowJoinToken,
+    reset,
+  }
+}
+
 const saved = (): Credentials => {
   const defaultURL = defaultServiceURL(configuredServiceURL, location.origin)
   try { return JSON.parse(sessionStorage.getItem(SESSION_STORAGE_KEY) ?? 'null') ?? { url: defaultURL, key: '' } }
@@ -33,24 +88,27 @@ export function App() {
   const [networksLoading, setNetworksLoading] = useState(false)
   const [networksLoadFailed, setNetworksLoadFailed] = useState(false)
   const [peerNames, setPeerNames] = useState<Record<string, string>>({})
-  const [active, setActive] = useState<Peer | null>(null)
+  const {
+    active,
+    setActive,
+    modal,
+    setModal,
+    peerConfig,
+    setPeerConfig,
+    peerConfigLoaded,
+    setPeerConfigLoaded,
+    joinToken,
+    setJoinToken,
+    showJoinToken,
+    setShowJoinToken,
+    reset: resetModalState,
+  } = useDashboardModal()
   const [search, setSearch] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
-  const [modal, setModal] = useState<'network' | 'peer' | 'join' | null>(null)
-  const [peerConfig, setPeerConfig] = useState<PeerConfig>({ version: 1 })
-  const [peerConfigLoaded, setPeerConfigLoaded] = useState(false)
-  const [joinToken, setJoinToken] = useState('')
-  const [showJoinToken, setShowJoinToken] = useState(false)
   const [copied, setCopied] = useState('')
-  const peerLoadID = useRef(0)
-  const refreshLoadID = useRef(0)
-  const serviceVersionLoadID = useRef(0)
-  const sessionID = useRef(0)
-  const peerNameEditID = useRef<Record<string, number>>({})
-  const peerConfigLoadID = useRef(0)
-  const joinLoadID = useRef(0)
+  const { peerLoadID, refreshLoadID, serviceVersionLoadID, sessionID, peerNameEditID, peerConfigLoadID, joinLoadID } = useDashboardRequestState()
 
   const selected = networks.find((network) => network.id === selectedID) ?? null
   const peerCountLabel = peersLoadFailed ? '—' : String(peers.length)
@@ -58,14 +116,15 @@ export function App() {
   const join = useMemo(() => joinToken && selected ? joinCommands() : null, [joinToken, selected])
 
   async function loadPeers(client: ServiceAPI, networkID: string, isCurrent = () => true) {
-    const requestID = ++peerLoadID.current
+    const isPeerLoadCurrent = beginRequest(peerLoadID)
     const nameEditSnapshot = { ...peerNameEditID.current }
-    setPeers([]); setPeerNames({})
+    setPeers([])
+    setPeerNames({})
     setPeersLoading(Boolean(networkID)); setPeersLoadFailed(false)
     if (!networkID) return
     try {
       const nextPeers = await client.peers(networkID)
-      if (requestID !== peerLoadID.current || !isCurrent()) return
+      if (!isPeerLoadCurrent() || !isCurrent()) return
       setPeers(nextPeers)
       setPeersLoading(false)
       const names = await Promise.all(nextPeers.map(async (peer) => {
@@ -74,15 +133,16 @@ export function App() {
           return [peer.node_id, String(config?.name || peer.node_id)] as const
         } catch { return [peer.node_id, peer.node_id] as const }
       }))
-      if (requestID === peerLoadID.current && isCurrent()) {
+      if (isPeerLoadCurrent() && isCurrent()) {
         setPeerNames((previous) => ({
           ...previous,
           ...Object.fromEntries(names.filter(([nodeID]) => (peerNameEditID.current[nodeID] ?? 0) === (nameEditSnapshot[nodeID] ?? 0))),
         }))
       }
     } catch (cause) {
-      if (requestID === peerLoadID.current && isCurrent()) {
-        setPeersLoading(false); setPeersLoadFailed(true)
+      if (isPeerLoadCurrent() && isCurrent()) {
+        setPeersLoading(false)
+        setPeersLoadFailed(true)
         setError(cause instanceof Error ? cause.message : 'Could not load peers')
       }
     }
@@ -90,35 +150,38 @@ export function App() {
 
   async function refresh(client = api, networkID = selectedID, isCurrent = () => true, knownNetworks?: Network[]) {
     if (!client) return
-    const requestID = ++refreshLoadID.current
-    const currentSessionID = sessionID.current
-    const isRefreshCurrent = () => requestID === refreshLoadID.current && currentSessionID === sessionID.current && isCurrent()
-    const versionRequestID = ++serviceVersionLoadID.current
+    const isRefreshRequestCurrent = beginRequest(refreshLoadID, sessionID)
+    const isRefreshCurrent = () => isRefreshRequestCurrent() && isCurrent()
+    const isVersionRequestCurrent = beginRequest(serviceVersionLoadID, sessionID)
     peerLoadID.current++
-    setPeers([]); setPeerNames({})
+    setPeers([])
+    setPeerNames({})
     setPeersLoading(true); setPeersLoadFailed(false)
     setNetworksLoading(true)
     setBusy(true); setError('')
     try {
       void client.version().then((currentVersion) => {
-        if (versionRequestID === serviceVersionLoadID.current && currentSessionID === sessionID.current && isCurrent()) {
+        if (isVersionRequestCurrent() && isCurrent()) {
           setServiceVersion(currentVersion)
         }
       }).catch(() => {
-        if (versionRequestID === serviceVersionLoadID.current && currentSessionID === sessionID.current && isCurrent()) {
+        if (isVersionRequestCurrent() && isCurrent()) {
           setServiceVersion('')
         }
       })
       const items = knownNetworks ?? await client.networks()
       if (!isRefreshCurrent()) return
-      setNetworksLoading(false); setNetworksLoadFailed(false)
+      setNetworksLoading(false)
+      setNetworksLoadFailed(false)
       setNetworks(items)
       const nextID = items.some((network) => network.id === networkID) ? networkID : items[0]?.id ?? ''
       setSelectedID(nextID)
       void loadPeers(client, nextID, isRefreshCurrent)
     } catch (cause) {
       if (isRefreshCurrent()) {
-        setPeersLoading(false); setPeersLoadFailed(true); setNetworksLoading(false)
+        setPeersLoading(false)
+        setPeersLoadFailed(true)
+        setNetworksLoading(false)
         setNetworksLoadFailed(true)
         setError(cause instanceof Error ? cause.message : 'Could not load service data')
       }
@@ -166,81 +229,84 @@ export function App() {
 
   async function signIn(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError('')
-    const requestSessionID = ++sessionID.current
+    const isSignInCurrent = beginRequest(sessionID)
     const signedInCredentials = { ...credentials, url: credentials.url.trim() }
     const client = new ServiceAPI(signedInCredentials.url, signedInCredentials.key)
     try {
       await client.verify()
-      if (sessionID.current !== requestSessionID) return
+      if (!isSignInCurrent()) return
       sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(signedInCredentials))
       setCredentials(signedInCredentials)
       setServiceURLs([...new Set([...savedServiceURLs(configuredServiceURL, location.origin), ...rememberServiceURL(signedInCredentials.url)])])
-      setAPI(client); await refresh(client, '', () => sessionID.current === requestSessionID)
-    } catch (cause) { if (sessionID.current === requestSessionID) setError(cause instanceof Error ? cause.message : 'Could not connect to Peerimeter Service') }
-    finally { if (sessionID.current === requestSessionID) setBusy(false) }
+      setAPI(client); await refresh(client, '', isSignInCurrent)
+    } catch (cause) { if (isSignInCurrent()) setError(cause instanceof Error ? cause.message : 'Could not connect to Peerimeter Service') }
+    finally { if (isSignInCurrent()) setBusy(false) }
   }
 
   async function selectNetwork(id: string) {
     refreshLoadID.current++
     const requestSessionID = sessionID.current
+    const isSelectionCurrent = () => sessionID.current === requestSessionID
     setNetworksLoading(false)
     setSelectedID(id); setActive(null); setJoinToken(''); setShowJoinToken(false); setError(''); joinLoadID.current++
     if (!api || !id) { setPeers([]); setPeerNames({}); setPeersLoading(false); setPeersLoadFailed(false); return }
     const client = api
     setBusy(true)
-    try { await loadPeers(client, id, () => sessionID.current === requestSessionID) }
-    finally { if (sessionID.current === requestSessionID) setBusy(false) }
+    try { await loadPeers(client, id, isSelectionCurrent) }
+    finally { if (isSelectionCurrent()) setBusy(false) }
   }
 
   async function openPeer(peer: Peer) {
-    const requestID = ++peerConfigLoadID.current
+    const isPeerConfigCurrent = beginRequest(peerConfigLoadID, sessionID)
     const networkID = selectedID
     setActive(peer); setPeerConfig({ version: 1 }); setPeerConfigLoaded(false); setError(''); setModal('peer')
     try {
       const config = await api?.peerConfig(networkID, peer.node_id)
-      if (requestID !== peerConfigLoadID.current) return
+      if (!isPeerConfigCurrent()) return
       setPeerConfig(config ?? { version: 1, name: peer.node_id, notes: '' }); setPeerConfigLoaded(true)
-    } catch (cause) { if (requestID === peerConfigLoadID.current) setError(cause instanceof Error ? cause.message : 'Could not load peer details') }
+    } catch (cause) { if (isPeerConfigCurrent()) setError(cause instanceof Error ? cause.message : 'Could not load peer details') }
   }
 
   async function createNetwork(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (!api) return
     const client = api
     const requestSessionID = sessionID.current
+    const isCreateNetworkCurrent = () => sessionID.current === requestSessionID
     const form = new FormData(event.currentTarget)
     const name = String(form.get('name') ?? '').trim()
     const network = { version: 1, name, id: slug(String(form.get('id') || name)), cidr: String(form.get('cidr') ?? '').trim() }
     setBusy(true); setError('')
     try {
       await client.createNetwork(network)
-      if (sessionID.current !== requestSessionID) return
-      closeModal(); setNotice('Network created'); await refresh(client, network.id, () => sessionID.current === requestSessionID)
-    } catch (cause) { if (sessionID.current === requestSessionID) setError(cause instanceof Error ? cause.message : 'Could not create network') }
-    finally { if (sessionID.current === requestSessionID) setBusy(false) }
+      if (!isCreateNetworkCurrent()) return
+      closeModal(); setNotice('Network created'); await refresh(client, network.id, isCreateNetworkCurrent)
+    } catch (cause) { if (isCreateNetworkCurrent()) setError(cause instanceof Error ? cause.message : 'Could not create network') }
+    finally { if (isCreateNetworkCurrent()) setBusy(false) }
   }
 
   async function savePeer(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (!api || !active) return
     const requestSessionID = sessionID.current
+    const isSavePeerCurrent = () => sessionID.current === requestSessionID
     const form = new FormData(event.currentTarget)
     const config = { ...peerConfig, version: 1, name: String(form.get('name') ?? '').trim(), notes: String(form.get('notes') ?? '').trim() }
     setBusy(true); setError('')
     try {
       await api.savePeerConfig(selectedID, active.node_id, config)
-      if (sessionID.current !== requestSessionID) return
+      if (!isSavePeerCurrent()) return
       peerNameEditID.current = { ...peerNameEditID.current, [active.node_id]: (peerNameEditID.current[active.node_id] ?? 0) + 1 }
       setPeerConfig(config); setPeerNames((previous) => ({ ...previous, [active.node_id]: String(config.name) })); closeModal(); setNotice('Peer details saved')
-    } catch (cause) { if (sessionID.current === requestSessionID) setError(cause instanceof Error ? cause.message : 'Could not save peer') }
-    finally { if (sessionID.current === requestSessionID) setBusy(false) }
+    } catch (cause) { if (isSavePeerCurrent()) setError(cause instanceof Error ? cause.message : 'Could not save peer') }
+    finally { if (isSavePeerCurrent()) setBusy(false) }
   }
 
   async function showJoin() {
     if (!api) return
-    const requestID = ++joinLoadID.current
+    const isJoinRequestCurrent = beginRequest(joinLoadID, sessionID)
     const networkID = selectedID
     setError(''); setJoinToken(''); setShowJoinToken(false); setModal('join')
-    try { const token = await api.joinToken(networkID); if (requestID === joinLoadID.current) setJoinToken(token) }
-    catch (cause) { if (requestID === joinLoadID.current) setError(cause instanceof Error ? cause.message : 'Could not create join bundle') }
+    try { const token = await api.joinToken(networkID); if (isJoinRequestCurrent()) setJoinToken(token) }
+    catch (cause) { if (isJoinRequestCurrent()) setError(cause instanceof Error ? cause.message : 'Could not create join bundle') }
   }
 
   function openNetworkModal() {
@@ -265,7 +331,19 @@ export function App() {
 
   function signOut() {
     sessionID.current++; refreshLoadID.current++; peerLoadID.current++; peerConfigLoadID.current++; joinLoadID.current++
-    sessionStorage.removeItem(SESSION_STORAGE_KEY); setAPI(null); serviceVersionLoadID.current++; setServiceVersion(''); setNetworks([]); setPeers([]); setPeersLoading(false); setPeersLoadFailed(false); setNetworksLoading(false); setNetworksLoadFailed(false); setPeerNames({}); setSelectedID(''); setActive(null); setJoinToken(''); setShowJoinToken(false); setPeerConfig({ version: 1 }); setPeerConfigLoaded(false)
+    sessionStorage.removeItem(SESSION_STORAGE_KEY)
+    setAPI(null)
+    serviceVersionLoadID.current++
+    setServiceVersion('')
+    setNetworks([])
+    setPeers([])
+    setPeersLoading(false)
+    setPeersLoadFailed(false)
+    setNetworksLoading(false)
+    setNetworksLoadFailed(false)
+    setPeerNames({})
+    setSelectedID('')
+    resetModalState()
     setBusy(false)
     setCredentials({ url: defaultServiceURL(configuredServiceURL, location.origin), key: '' })
   }
@@ -277,11 +355,32 @@ export function App() {
   return <div className="app-shell">
     <Sidebar api={api} serviceVersion={serviceVersion} networks={networks} selectedID={selectedID} loading={networksLoading} failed={networksLoadFailed} onCreateNetwork={openNetworkModal} onSelectNetwork={(id) => void selectNetwork(id)} onSignOut={signOut} />
     <main className="main-panel">
-      <header className="topbar"><div className="breadcrumbs"><span>Networks</span>{selected && <><ChevronRight size={13} /><strong>{selected.name}</strong></>}</div><div className="top-actions"><span className="secure-pill"><span className="live-dot" /> API connected</span><button className="icon-button" title="Refresh" onClick={() => void refresh()}><RefreshCw size={16} className={busy ? 'spin' : ''} /></button><div className="avatar">P</div></div></header>
+      <header className="topbar">
+        <div className="breadcrumbs">
+          <span>Networks</span>
+          {selected && <><ChevronRight size={13} /><strong>{selected.name}</strong></>}
+        </div>
+        <div className="top-actions">
+          <span className="secure-pill"><span className="live-dot" /> API connected</span>
+          <button className="icon-button" title="Refresh" onClick={() => void refresh()}>
+            <RefreshCw size={16} className={busy ? 'spin' : ''} />
+          </button>
+          <div className="avatar">P</div>
+        </div>
+      </header>
       {error && <div className="alert error-alert"><span>{error}</span><button onClick={() => setError('')}><X size={15} /></button></div>}
       {notice && <div className="alert success-alert"><Check size={15} /><span>{notice}</span><button onClick={() => setNotice('')}><X size={15} /></button></div>}
       {!selected ? <WelcomeSection loading={networksLoading} failed={networksLoadFailed} onRefresh={() => void refresh()} onCreateNetwork={openNetworkModal} /> : <>
-        <section className="page-heading"><div><div className="eyebrow">NETWORK OVERVIEW <span className="heading-dot">/</span> {selected.id}</div><h1>{selected.name}</h1><p>Manage the peers connected to this network.</p></div><button className="button primary" onClick={() => void showJoin()}><Plus size={16} /> Add a peer</button></section>
+        <section className="page-heading">
+          <div>
+            <div className="eyebrow">NETWORK OVERVIEW <span className="heading-dot">/</span> {selected.id}</div>
+            <h1>{selected.name}</h1>
+            <p>Manage the peers connected to this network.</p>
+          </div>
+          <button className="button primary" onClick={() => void showJoin()}>
+            <Plus size={16} /> Add a peer
+          </button>
+        </section>
         <section className="stats-grid">
           <Stat icon={<Users size={17} />} label="Connected peers" value={peersLoading ? <span className="skeleton-bar skeleton-number" aria-hidden="true" /> : peerCountLabel} hint={peersLoading ? 'Loading network peers' : peersLoadFailed ? 'Could not load peer count' : 'Registered on this network'} />
           <Stat icon={<Globe2 size={17} />} label="Network range" value={selected.cidr} hint="Private IPv4 address space" />
@@ -292,7 +391,26 @@ export function App() {
       </>}
     </main>
 
-      {modal && <DashboardModal modal={modal} active={active} selected={selected} peerConfig={peerConfig} peerConfigLoaded={peerConfigLoaded} join={join} joinToken={joinToken} showJoinToken={showJoinToken} copied={copied} error={error} busy={busy} onClose={closeModal} onCreateNetwork={createNetwork} onSavePeer={savePeer} onToggleJoinToken={() => setShowJoinToken((shown) => !shown)} onCopy={(text, label) => void copy(text, label)} />}
+      {modal && (
+        <DashboardModal
+          modal={modal}
+          active={active}
+          selected={selected}
+          peerConfig={peerConfig}
+          peerConfigLoaded={peerConfigLoaded}
+          join={join}
+          joinToken={joinToken}
+          showJoinToken={showJoinToken}
+          copied={copied}
+          error={error}
+          busy={busy}
+          onClose={closeModal}
+          onCreateNetwork={createNetwork}
+          onSavePeer={savePeer}
+          onToggleJoinToken={() => setShowJoinToken((shown) => !shown)}
+          onCopy={(text, label) => void copy(text, label)}
+        />
+      )}
   </div>
 }
 
@@ -593,6 +711,35 @@ function CopyButton({ copied, label, copiedLabel = 'Copied', onCopy }: {
   return <button type="button" className="copy-button" onClick={onCopy}>{copied ? <Check size={14} /> : <Copy size={14} />}{copied ? copiedLabel : label}</button>
 }
 
-function Brand() { return <a className="brand" href="https://peerimeter.app/" aria-label={`Peerimeter home, dashboard commit ${__DASHBOARD_COMMIT__}`}><span className="brand-icon">p<span>.</span></span><span>peerimeter<small>NETWORK DASHBOARD · {__DASHBOARD_COMMIT__}</small></span></a> }
-function Stat({ icon, label, value, hint, active = false }: { icon: React.ReactNode; label: string; value: React.ReactNode; hint: string; active?: boolean }) { return <article className="stat-card"><div className="stat-icon">{icon}</div><span className="stat-label">{label}</span><strong className={active ? 'stat-value status-value' : 'stat-value'}>{active && <i />}{value}</strong><small>{hint}</small></article> }
-function ModalError({ error }: { error: string }) { return error ? <p className="error-text modal-error">{error}</p> : null }
+function Brand() {
+  return (
+    <a className="brand" href="https://peerimeter.app/" aria-label={`Peerimeter home, dashboard commit ${__DASHBOARD_COMMIT__}`}>
+      <span className="brand-icon">p<span>.</span></span>
+      <span>peerimeter<small>NETWORK DASHBOARD · {__DASHBOARD_COMMIT__}</small></span>
+    </a>
+  )
+}
+
+function Stat({ icon, label, value, hint, active = false }: {
+  icon: React.ReactNode
+  label: string
+  value: React.ReactNode
+  hint: string
+  active?: boolean
+}) {
+  return (
+    <article className="stat-card">
+      <div className="stat-icon">{icon}</div>
+      <span className="stat-label">{label}</span>
+      <strong className={active ? 'stat-value status-value' : 'stat-value'}>
+        {active && <i />}
+        {value}
+      </strong>
+      <small>{hint}</small>
+    </article>
+  )
+}
+
+function ModalError({ error }: { error: string }) {
+  return error ? <p className="error-text modal-error">{error}</p> : null
+}
