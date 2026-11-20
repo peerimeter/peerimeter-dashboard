@@ -46,6 +46,7 @@ export function App() {
   const [copied, setCopied] = useState('')
   const peerLoadID = useRef(0)
   const refreshLoadID = useRef(0)
+  const serviceVersionLoadID = useRef(0)
   const sessionID = useRef(0)
   const peerNameEditID = useRef<Record<string, number>>({})
   const peerConfigLoadID = useRef(0)
@@ -92,6 +93,7 @@ export function App() {
     const requestID = ++refreshLoadID.current
     const currentSessionID = sessionID.current
     const isRefreshCurrent = () => requestID === refreshLoadID.current && currentSessionID === sessionID.current && isCurrent()
+    const versionRequestID = ++serviceVersionLoadID.current
     peerLoadID.current++
     setPeers([]); setPeerNames({})
     setPeersLoading(true); setPeersLoadFailed(false)
@@ -99,9 +101,13 @@ export function App() {
     setBusy(true); setError('')
     try {
       void client.version().then((currentVersion) => {
-        if (isRefreshCurrent()) setServiceVersion(currentVersion)
+        if (versionRequestID === serviceVersionLoadID.current && currentSessionID === sessionID.current && isCurrent()) {
+          setServiceVersion(currentVersion)
+        }
       }).catch(() => {
-        if (isRefreshCurrent()) setServiceVersion('')
+        if (versionRequestID === serviceVersionLoadID.current && currentSessionID === sessionID.current && isCurrent()) {
+          setServiceVersion('')
+        }
       })
       const items = knownNetworks ?? await client.networks()
       if (!isRefreshCurrent()) return
@@ -259,7 +265,7 @@ export function App() {
 
   function signOut() {
     sessionID.current++; refreshLoadID.current++; peerLoadID.current++; peerConfigLoadID.current++; joinLoadID.current++
-    sessionStorage.removeItem(SESSION_STORAGE_KEY); setAPI(null); setServiceVersion(''); setNetworks([]); setPeers([]); setPeersLoading(false); setPeersLoadFailed(false); setNetworksLoading(false); setNetworksLoadFailed(false); setPeerNames({}); setSelectedID(''); setActive(null); setJoinToken(''); setShowJoinToken(false); setPeerConfig({ version: 1 }); setPeerConfigLoaded(false)
+    sessionStorage.removeItem(SESSION_STORAGE_KEY); setAPI(null); serviceVersionLoadID.current++; setServiceVersion(''); setNetworks([]); setPeers([]); setPeersLoading(false); setPeersLoadFailed(false); setNetworksLoading(false); setNetworksLoadFailed(false); setPeerNames({}); setSelectedID(''); setActive(null); setJoinToken(''); setShowJoinToken(false); setPeerConfig({ version: 1 }); setPeerConfigLoaded(false)
     setBusy(false)
     setCredentials({ url: defaultServiceURL(configuredServiceURL, location.origin), key: '' })
   }
