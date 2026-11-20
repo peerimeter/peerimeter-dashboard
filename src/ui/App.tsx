@@ -392,7 +392,7 @@ export function App() {
           <Stat icon={<Activity size={17} />} label="Network status" value="Active" hint="Service API reachable" active />
         </section>
         <PeersTableSection selected={selected} peers={peers} peerNames={peerNames} filteredPeers={filteredPeers} peersLoading={peersLoading} peersLoadFailed={peersLoadFailed} peerCountLabel={peerCountLabel} search={search} onSearch={setSearch} onRefresh={() => void refresh()} onJoin={() => void showJoin()} onOpenPeer={(peer) => void openPeer(peer)} />
-        <footer className="page-footer"><span><Shield size={13} /> Direct WireGuard mesh · No relay</span><span>Peerimeter Service {serviceVersionLoading ? <span className="skeleton-bar skeleton-service-version" aria-hidden="true" /> : serviceVersion || 'version unavailable'}</span></footer>
+        <footer className="page-footer"><span><Shield size={13} /> Direct WireGuard mesh · No relay</span><span>Peerimeter Service {serviceVersionLoading ? <><span className="sr-only">Loading service version</span><span className="skeleton-bar skeleton-service-version" aria-hidden="true" /></> : serviceVersion || 'version unavailable'}</span></footer>
       </>}
     </main>
 
@@ -481,7 +481,7 @@ function Sidebar({ api, serviceVersion, serviceVersionLoading, networks, selecte
   return <aside className="sidebar">
     <Brand />
     <div className="side-label">WORKSPACE</div>
-    <div className="service-tag"><span className="live-dot" /><span><b>Service {serviceVersionLoading ? <span className="skeleton-bar skeleton-service-version" aria-hidden="true" /> : serviceVersion || 'version unavailable'}</b><small>{new URL(api.baseURL).host}</small></span></div>
+    <div className="service-tag"><span className="live-dot" /><span><b>Service {serviceVersionLoading ? <><span className="sr-only">Loading service version</span><span className="skeleton-bar skeleton-service-version" aria-hidden="true" /></> : serviceVersion || 'version unavailable'}</b><small>{new URL(api.baseURL).host}</small></span></div>
     <div className="side-label network-label">NETWORKS <button aria-label="Create network" onClick={onCreateNetwork}><Plus size={15} /></button></div>
     <nav className="network-list">
       {networks.map((network) => <button key={network.id} className={selectedID === network.id ? 'network-nav active' : 'network-nav'} onClick={() => onSelectNetwork(network.id)}>

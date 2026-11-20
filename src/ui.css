@@ -48,3 +48,4 @@ td{font-size:12px}
 .stat-value{grid-column:1/-1;grid-row:2}
 .stat-card>small{grid-column:1/-1;grid-row:3}
 .skeleton-service-version{display:inline-block;width:58px;height:8px;vertical-align:middle}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
