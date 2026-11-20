@@ -98,9 +98,11 @@ export function App() {
     setNetworksLoading(true)
     setBusy(true); setError('')
     try {
-      const currentVersion = await client.version().catch(() => '')
-      if (!isRefreshCurrent()) return
-      setServiceVersion(currentVersion)
+      void client.version().then((currentVersion) => {
+        if (isRefreshCurrent()) setServiceVersion(currentVersion)
+      }).catch(() => {
+        if (isRefreshCurrent()) setServiceVersion('')
+      })
       const items = knownNetworks ?? await client.networks()
       if (!isRefreshCurrent()) return
       setNetworksLoading(false); setNetworksLoadFailed(false)
