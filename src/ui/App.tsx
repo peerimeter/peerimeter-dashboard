@@ -75,6 +75,7 @@ const saved = (): Credentials => {
 }
 const slug = (value: string) => value.toLowerCase().trim().replace(/[^a-z0-9_.-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 128)
 const shortKey = (key: string) => key ? `${key.slice(0, 10)}…${key.slice(-6)}` : '—'
+const peerDeletionKey = (networkID: string, peerID: string) => JSON.stringify([networkID, peerID])
 
 export function App() {
   const [credentials, setCredentials] = useState(saved)
@@ -113,6 +114,8 @@ export function App() {
   } = useDashboardModal()
   const [search, setSearch] = useState('')
   const [busy, setBusy] = useState(false)
+  const [deletingPeerKeys, setDeletingPeerKeys] = useState<Set<string>>(() => new Set())
+  const deletingPeerKeysRef = useRef(new Set<string>())
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [copied, setCopied] = useState('')
@@ -328,6 +331,10 @@ export function App() {
     const client = api
     const peerID = active.node_id
     const networkID = selectedID
+    const deletionKey = peerDeletionKey(networkID, peerID)
+    if (deletingPeerKeysRef.current.has(deletionKey)) return
+    deletingPeerKeysRef.current.add(deletionKey)
+    setDeletingPeerKeys((current) => new Set(current).add(deletionKey))
     const requestSessionID = sessionID.current
     const modalInstanceID = peerConfigLoadID.current
     const isDeleteSessionCurrent = () => sessionID.current === requestSessionID
@@ -349,7 +356,15 @@ export function App() {
         await loadPeers(client, networkID, () => isDeleteSessionCurrent() && selectedIDRef.current === networkID)
       }
     } catch (cause) { if (isDeleteSessionCurrent()) setError(cause instanceof Error ? cause.message : 'Could not delete peer') }
-    finally { if (isDeleteSessionCurrent()) setBusy(false) }
+    finally {
+      deletingPeerKeysRef.current.delete(deletionKey)
+      setDeletingPeerKeys((current) => {
+        const next = new Set(current)
+        next.delete(deletionKey)
+        return next
+      })
+      if (isDeleteSessionCurrent()) setBusy(false)
+    }
   }
 
   async function showJoin() {
@@ -458,6 +473,7 @@ export function App() {
           copied={copied}
           error={error}
           busy={busy}
+          deletingPeer={Boolean(active && deletingPeerKeys.has(peerDeletionKey(selectedID, active.node_id)))}
           onClose={closeModal}
           onCreateNetwork={createNetwork}
           onSavePeer={savePeer}
@@ -647,6 +663,7 @@ type DashboardModalProps = {
   copied: string
   error: string
   busy: boolean
+  deletingPeer: boolean
   onClose: () => void
   onCreateNetwork: React.FormEventHandler<HTMLFormElement>
   onSavePeer: React.FormEventHandler<HTMLFormElement>
@@ -700,10 +717,10 @@ function NetworkModal({ error, busy, onCreateNetwork, onClose }: DashboardModalP
   </form>
 }
 
-function PeerModal({ active, peerConfig, peerConfigLoaded, peerConfigLoadFailed, error, busy, onSavePeer, onDeletePeer, onClose }: DashboardModalProps & { active: Peer }) {
+function PeerModal({ active, peerConfig, peerConfigLoaded, peerConfigLoadFailed, error, busy, deletingPeer, onSavePeer, onDeletePeer, onClose }: DashboardModalProps & { active: Peer }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const submitPeerForm = (event: React.FormEvent<HTMLFormElement>) => {
-    if (confirmingDelete || busy) {
+    if (confirmingDelete || busy || deletingPeer) {
       event.preventDefault()
       return
     }
@@ -712,16 +729,16 @@ function PeerModal({ active, peerConfig, peerConfigLoaded, peerConfigLoadFailed,
 
   return <form className="form-stack modal-body" onSubmit={submitPeerForm}>
     <div className="peer-detail-card"><div className="peer-avatar large"><Cpu size={19} /></div><div><b>{active.node_id}</b><small>{active.tunnel_address || 'Address pending'} · {active.public_endpoint || 'Endpoint not reported'}</small></div></div>
-    <label>Display name<input name="name" maxLength={128} disabled={busy || confirmingDelete} defaultValue={String(peerConfig.name ?? active.node_id)} placeholder="Build server" /></label>
-    <label>Notes<textarea name="notes" rows={3} maxLength={1000} disabled={busy || confirmingDelete} defaultValue={String(peerConfig.notes ?? '')} placeholder="Optional notes about this peer" /></label>
+    <label>Display name<input name="name" maxLength={128} disabled={busy || confirmingDelete || deletingPeer} defaultValue={String(peerConfig.name ?? active.node_id)} placeholder="Build server" /></label>
+    <label>Notes<textarea name="notes" rows={3} maxLength={1000} disabled={busy || confirmingDelete || deletingPeer} defaultValue={String(peerConfig.notes ?? '')} placeholder="Optional notes about this peer" /></label>
     <div className="peer-facts"><span>Agent version <code>{active.agent_cli_version || '—'}</code></span><span>Primary interface <code>{active.primary_interface || '—'} · {active.local_addresses?.join(', ') || '—'}</code></span><span>Public key <code>{shortKey(active.public_key)}</code></span><span>Listen port <code>{active.listen_port ?? '—'}</code></span></div>
     <p className="readonly-note">Deleting this peer revokes its registration and removes its saved details. The agent must join this network again to reconnect.</p>
     <ModalError error={error} />
     {confirmingDelete && <p className="delete-confirmation" role="alert">Delete <b>{active.node_id}</b> from this network? This action cannot be undone.</p>}
     <div className="modal-actions">
       {confirmingDelete
-        ? <><button type="button" className="button secondary" disabled={busy} onClick={() => setConfirmingDelete(false)}>Cancel</button><button type="button" className="button danger" disabled={busy} onClick={onDeletePeer}>{busy ? 'Deleting…' : 'Confirm delete'}</button></>
-        : <><button type="button" className="button secondary" onClick={onClose}>Close</button><button type="button" className="button danger" disabled={busy || (!peerConfigLoaded && !peerConfigLoadFailed)} onClick={() => setConfirmingDelete(true)}>Delete peer</button><button className="button primary" disabled={busy || !peerConfigLoaded}>{busy ? 'Saving…' : 'Save details'}</button></>}
+        ? <><button type="button" className="button secondary" disabled={busy || deletingPeer} onClick={() => setConfirmingDelete(false)}>Cancel</button><button type="button" className="button danger" disabled={busy || deletingPeer} onClick={onDeletePeer}>{deletingPeer ? 'Deleting…' : busy ? 'Working…' : 'Confirm delete'}</button></>
+        : <><button type="button" className="button secondary" onClick={onClose}>Close</button><button type="button" className="button danger" disabled={busy || deletingPeer || (!peerConfigLoaded && !peerConfigLoadFailed)} onClick={() => setConfirmingDelete(true)}>{deletingPeer ? 'Deleting…' : 'Delete peer'}</button><button className="button primary" disabled={busy || deletingPeer || !peerConfigLoaded}>{busy ? 'Saving…' : 'Save details'}</button></>}
     </div>
   </form>
 }
