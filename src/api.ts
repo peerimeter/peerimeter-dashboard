@@ -33,14 +33,27 @@ export function readStoredServiceURLs(storage: Pick<Storage, 'getItem'>): string
   }
 }
 
+function browserStorage(): Storage | undefined {
+  try {
+    return localStorage
+  } catch {
+    return undefined
+  }
+}
+
 export function savedServiceURLs(configured: string | undefined, origin: string, storage?: Pick<Storage, 'getItem'>): string[] {
-  const urls = [defaultServiceURL(configured, origin), ...readStoredServiceURLs(storage ?? localStorage)]
+  const defaultURL = normalizeServiceURL(defaultServiceURL(configured, origin))
+  const target = storage ?? browserStorage()
+  if (!target) return defaultURL ? [defaultURL] : []
+
+  const urls = [defaultURL, ...readStoredServiceURLs(target)]
   return [...new Set(urls.map(normalizeServiceURL).filter(Boolean))]
 }
 
 export function rememberServiceURL(url: string, storage?: Pick<Storage, 'getItem' | 'setItem'>): string[] {
   const normalized = normalizeServiceURL(url)
-  const target = storage ?? localStorage
+  const target = storage ?? browserStorage()
+  if (!target) return normalized ? [normalized] : []
   const urls = [...new Set([normalized, ...readStoredServiceURLs(target)].filter(Boolean))].slice(0, MAX_SAVED_SERVICE_URLS)
   try { target.setItem(serviceURLsKey, JSON.stringify(urls)) } catch { /* Keep the connected URL available in memory. */ }
   return urls

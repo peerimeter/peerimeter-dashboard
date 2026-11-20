@@ -93,6 +93,21 @@ describe('service URL storage helpers', () => {
     expect(readStoredServiceURLs({ getItem: () => '{bad json' })).toEqual([])
     expect(readStoredServiceURLs({ getItem: () => { throw new Error('storage unavailable') } })).toEqual([])
   })
+
+  it('falls back to the normalized default URL when the localStorage getter throws', () => {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      get: () => { throw new Error('storage unavailable') },
+    })
+
+    try {
+      expect(savedServiceURLs(' https://default.example.test/// ', 'https://dashboard.example.test')).toEqual(['https://default.example.test'])
+    } finally {
+      if (descriptor) Object.defineProperty(globalThis, 'localStorage', descriptor)
+      else Reflect.deleteProperty(globalThis, 'localStorage')
+    }
+  })
 })
 
 describe('savedServiceURLs', () => {
