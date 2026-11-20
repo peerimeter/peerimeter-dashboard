@@ -1,0 +1,16 @@
+.button.danger {
+  border-color: #713342;
+  background: #351923;
+  color: #ffb3bd;
+}
+
+.delete-confirmation {
+  margin: 0;
+  padding: 10px 11px;
+  border: 1px solid #713342;
+  border-radius: 8px;
+  background: #25131a;
+  color: #ffb3bd;
+  font-size: 11px;
+  line-height: 1.5;
+}

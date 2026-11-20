@@ -30,11 +30,15 @@ describe('ServiceAPI', () => {
     const fetcher = vi.fn()
       .mockResolvedValueOnce(new Response(null, { status: 201 }))
       .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
     vi.stubGlobal('fetch', fetcher)
     const api = new ServiceAPI('https://service.example.com', 'key')
 
     await expect(api.createNetwork({ version: 1, id: 'mesh', name: 'Mesh', cidr: '10.0.0.0/24' })).resolves.toBeUndefined()
     await expect(api.savePeerConfig('mesh', 'node', { version: 1 })).resolves.toBeUndefined()
+    await expect(api.deletePeer('mesh', 'node')).resolves.toBeUndefined()
+    expect(fetcher.mock.calls[2][0]).toBe('https://service.example.com/api/v1/networks/mesh/nodes/node')
+    expect(fetcher.mock.calls[2][1]).toEqual(expect.objectContaining({ method: 'DELETE' }))
   })
 
   it('surfaces structured service errors', async () => {
