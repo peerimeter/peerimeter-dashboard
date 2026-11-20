@@ -81,6 +81,7 @@ export function App() {
   const [api, setAPI] = useState<ServiceAPI | null>(null)
   const [networks, setNetworks] = useState<Network[]>([])
   const [serviceVersion, setServiceVersion] = useState('')
+  const [serviceVersionLoading, setServiceVersionLoading] = useState(false)
   const [selectedID, setSelectedID] = useState('')
   const [peers, setPeers] = useState<Peer[]>([])
   const [peersLoading, setPeersLoading] = useState(false)
@@ -159,14 +160,17 @@ export function App() {
     setPeersLoading(true); setPeersLoadFailed(false)
     setNetworksLoading(true)
     setBusy(true); setError('')
+    setServiceVersionLoading(true)
     try {
       void client.version().then((currentVersion) => {
         if (isVersionRequestCurrent() && isCurrent()) {
           setServiceVersion(currentVersion)
+          setServiceVersionLoading(false)
         }
       }).catch(() => {
         if (isVersionRequestCurrent() && isCurrent()) {
           setServiceVersion('')
+          setServiceVersionLoading(false)
         }
       })
       const items = knownNetworks ?? await client.networks()
@@ -335,6 +339,7 @@ export function App() {
     setAPI(null)
     serviceVersionLoadID.current++
     setServiceVersion('')
+    setServiceVersionLoading(false)
     setNetworks([])
     setPeers([])
     setPeersLoading(false)
@@ -353,7 +358,7 @@ export function App() {
   if (!api) return <LoginScreen credentials={credentials} serviceURLs={serviceURLs} error={error} busy={busy} onCredentialsChange={setCredentials} onSubmit={signIn} />
 
   return <div className="app-shell">
-    <Sidebar api={api} serviceVersion={serviceVersion} networks={networks} selectedID={selectedID} loading={networksLoading} failed={networksLoadFailed} onCreateNetwork={openNetworkModal} onSelectNetwork={(id) => void selectNetwork(id)} onSignOut={signOut} />
+    <Sidebar api={api} serviceVersion={serviceVersion} serviceVersionLoading={serviceVersionLoading} networks={networks} selectedID={selectedID} loading={networksLoading} failed={networksLoadFailed} onCreateNetwork={openNetworkModal} onSelectNetwork={(id) => void selectNetwork(id)} onSignOut={signOut} />
     <main className="main-panel">
       <header className="topbar">
         <div className="breadcrumbs">
@@ -387,7 +392,7 @@ export function App() {
           <Stat icon={<Activity size={17} />} label="Network status" value="Active" hint="Service API reachable" active />
         </section>
         <PeersTableSection selected={selected} peers={peers} peerNames={peerNames} filteredPeers={filteredPeers} peersLoading={peersLoading} peersLoadFailed={peersLoadFailed} peerCountLabel={peerCountLabel} search={search} onSearch={setSearch} onRefresh={() => void refresh()} onJoin={() => void showJoin()} onOpenPeer={(peer) => void openPeer(peer)} />
-        <footer className="page-footer"><span><Shield size={13} /> Direct WireGuard mesh · No relay</span><span>Peerimeter Service {serviceVersion || 'version unavailable'}</span></footer>
+        <footer className="page-footer"><span><Shield size={13} /> Direct WireGuard mesh · No relay</span><span>Peerimeter Service {serviceVersionLoading ? <span className="skeleton-bar skeleton-service-version" aria-hidden="true" /> : serviceVersion || 'version unavailable'}</span></footer>
       </>}
     </main>
 
@@ -461,9 +466,10 @@ function LoginScreen({ credentials, serviceURLs, error, busy, onCredentialsChang
   </main>
 }
 
-function Sidebar({ api, serviceVersion, networks, selectedID, loading, failed, onCreateNetwork, onSelectNetwork, onSignOut }: {
+function Sidebar({ api, serviceVersion, serviceVersionLoading, networks, selectedID, loading, failed, onCreateNetwork, onSelectNetwork, onSignOut }: {
   api: ServiceAPI
   serviceVersion: string
+  serviceVersionLoading: boolean
   networks: Network[]
   selectedID: string
   loading: boolean
@@ -475,7 +481,7 @@ function Sidebar({ api, serviceVersion, networks, selectedID, loading, failed, o
   return <aside className="sidebar">
     <Brand />
     <div className="side-label">WORKSPACE</div>
-    <div className="service-tag"><span className="live-dot" /><span><b>Service {serviceVersion || 'version unavailable'}</b><small>{new URL(api.baseURL).host}</small></span></div>
+    <div className="service-tag"><span className="live-dot" /><span><b>Service {serviceVersionLoading ? <span className="skeleton-bar skeleton-service-version" aria-hidden="true" /> : serviceVersion || 'version unavailable'}</b><small>{new URL(api.baseURL).host}</small></span></div>
     <div className="side-label network-label">NETWORKS <button aria-label="Create network" onClick={onCreateNetwork}><Plus size={15} /></button></div>
     <nav className="network-list">
       {networks.map((network) => <button key={network.id} className={selectedID === network.id ? 'network-nav active' : 'network-nav'} onClick={() => onSelectNetwork(network.id)}>
