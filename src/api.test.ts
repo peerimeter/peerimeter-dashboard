@@ -26,6 +26,17 @@ describe('ServiceAPI', () => {
     expect(networks.map((network) => network.name)).toEqual(['Alpha', 'Zulu'])
   })
 
+  it('accepts empty successful responses for write operations', async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 201 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetcher)
+    const api = new ServiceAPI('https://service.example.com', 'key')
+
+    await expect(api.createNetwork({ version: 1, id: 'mesh', name: 'Mesh', cidr: '10.0.0.0/24' })).resolves.toBeUndefined()
+    await expect(api.savePeerConfig('mesh', 'node', { version: 1 })).resolves.toBeUndefined()
+  })
+
   it('surfaces structured service errors', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: 'network CIDR overlaps an existing network' }), { status: 409 })))
     await expect(new ServiceAPI('https://service.example.com', 'key').verify()).rejects.toThrow('network CIDR overlaps an existing network')

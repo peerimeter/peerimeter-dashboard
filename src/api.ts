@@ -67,12 +67,12 @@ export class ServiceAPI {
   readonly allowInsecureHTTP: boolean
 
   constructor(baseURL: string, key: string, allowInsecureHTTP = import.meta.env.VITE_ALLOW_INSECURE_HTTP === 'true') {
-    this.baseURL = baseURL.replace(/\/+$/, '')
+    this.baseURL = normalizeServiceURL(baseURL)
     this.key = key
     this.allowInsecureHTTP = allowInsecureHTTP
   }
 
-  async request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  private async requestResponse(path: string, init: RequestInit = {}): Promise<Response> {
     const target = new URL(this.baseURL)
     if (target.protocol !== 'https:' && !(target.protocol === 'http:' && (LOOPBACK_HOSTS.has(target.hostname) || this.allowInsecureHTTP))) {
       throw new Error('Service URL must use HTTPS unless it points to a loopback address')
@@ -93,43 +93,51 @@ export class ServiceAPI {
       } catch { /* Keep the HTTP status when the service has no JSON error. */ }
       throw new Error(message)
     }
-    if (response.status === 204 || response.status === 201) return undefined as T
+    return response
+  }
+
+  private async requestJSON<T>(path: string, init: RequestInit = {}): Promise<T> {
+    const response = await this.requestResponse(path, init)
     return response.json() as Promise<T>
+  }
+
+  private async requestVoid(path: string, init: RequestInit = {}): Promise<void> {
+    await this.requestResponse(path, init)
   }
 
   async verify(): Promise<Network[]> { return this.networks() }
   async version(): Promise<string> {
-    const result = await this.request<ServiceVersion>('/api/v1/version')
+    const result = await this.requestJSON<ServiceVersion>('/api/v1/version')
     return result.version
   }
   async networks(): Promise<Network[]> {
-    const result = await this.request<{ networks: Record<string, Network> }>('/api/v1/networks')
+    const result = await this.requestJSON<{ networks: Record<string, Network> }>('/api/v1/networks')
     return Object.values(result.networks ?? {}).sort((a, b) => a.name.localeCompare(b.name))
   }
   async createNetwork(network: Network): Promise<void> {
-    await this.request('/api/v1/networks', { method: 'POST', body: JSON.stringify(network) })
+    await this.requestVoid('/api/v1/networks', { method: 'POST', body: JSON.stringify(network) })
   }
   async peers(networkID: string): Promise<Peer[]> {
-    const result = await this.request<{ peers: Record<string, Peer> }>(
+    const result = await this.requestJSON<{ peers: Record<string, Peer> }>(
       `/api/v1/networks/${encodeURIComponent(networkID)}/peers`,
     )
     return Object.values(result.peers ?? {}).sort((a, b) => a.node_id.localeCompare(b.node_id))
   }
   async peerConfig(networkID: string, peerID: string): Promise<PeerConfig | null> {
     try {
-      return await this.request(`/api/v1/networks/${encodeURIComponent(networkID)}/nodes/${encodeURIComponent(peerID)}/config`)
+      return await this.requestJSON(`/api/v1/networks/${encodeURIComponent(networkID)}/nodes/${encodeURIComponent(peerID)}/config`)
     } catch (error) {
       if (error instanceof Error && error.message === 'configuration not found') return null
       throw error
     }
   }
   async savePeerConfig(networkID: string, peerID: string, config: PeerConfig): Promise<void> {
-    await this.request(`/api/v1/networks/${encodeURIComponent(networkID)}/nodes/${encodeURIComponent(peerID)}/config`, {
+    await this.requestVoid(`/api/v1/networks/${encodeURIComponent(networkID)}/nodes/${encodeURIComponent(peerID)}/config`, {
       method: 'PUT', body: JSON.stringify(config),
     })
   }
   async joinToken(networkID: string): Promise<string> {
-    const result = await this.request<{ token: string }>(`/api/v1/join-bundle?network_id=${encodeURIComponent(networkID)}`)
+    const result = await this.requestJSON<{ token: string }>(`/api/v1/join-bundle?network_id=${encodeURIComponent(networkID)}`)
     return result.token
   }
 }
