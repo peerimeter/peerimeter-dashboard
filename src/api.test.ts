@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { defaultServiceURL, joinCommands, rememberServiceURL, savedServiceURLs, ServiceAPI } from './api'
+import { defaultServiceURL, joinCommands, normalizeServiceURL, readStoredServiceURLs, rememberServiceURL, savedServiceURLs, ServiceAPI } from './api'
 
 afterEach(() => {
   vi.unstubAllEnvs()
@@ -80,6 +80,18 @@ describe('defaultServiceURL', () => {
     expect(defaultServiceURL(' https://api.example.test/ ', 'https://dashboard.example.test')).toBe('https://api.example.test/')
     expect(defaultServiceURL(undefined, 'https://dashboard.example.test')).toBe('https://dashboard.example.test')
     expect(defaultServiceURL('  ', 'https://dashboard.example.test')).toBe('https://dashboard.example.test')
+  })
+})
+
+describe('service URL storage helpers', () => {
+  it('normalizes whitespace and trailing slashes', () => {
+    expect(normalizeServiceURL('  https://service.example.test///  ')).toBe('https://service.example.test')
+  })
+
+  it('reads only string URLs and handles malformed or unavailable storage', () => {
+    expect(readStoredServiceURLs({ getItem: () => '["https://one.test", 42, null]' })).toEqual(['https://one.test'])
+    expect(readStoredServiceURLs({ getItem: () => '{bad json' })).toEqual([])
+    expect(readStoredServiceURLs({ getItem: () => { throw new Error('storage unavailable') } })).toEqual([])
   })
 })
 

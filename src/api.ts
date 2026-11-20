@@ -9,6 +9,10 @@ export type Peer = {
   primary_interface?: string
   public_endpoint?: string
 }
+export type PeerConfig = { version: number; name?: string; notes?: string; [key: string]: unknown }
+
+const MAX_SAVED_SERVICE_URLS = 20
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1'])
 
 export function defaultServiceURL(configured: string | undefined, origin: string): string {
   return configured?.trim() || origin
@@ -16,23 +20,28 @@ export function defaultServiceURL(configured: string | undefined, origin: string
 
 const serviceURLsKey = 'peerimeter.serviceURLs'
 
-export function savedServiceURLs(configured: string | undefined, origin: string, storage?: Pick<Storage, 'getItem'>): string[] {
-  const urls = [defaultServiceURL(configured, origin)]
+export function normalizeServiceURL(url: string): string {
+  return url.trim().replace(/\/+$/, '')
+}
+
+export function readStoredServiceURLs(storage: Pick<Storage, 'getItem'>): string[] {
   try {
-    const stored: unknown = JSON.parse((storage ?? localStorage).getItem(serviceURLsKey) ?? '[]')
-    if (Array.isArray(stored)) urls.push(...stored.filter((value): value is string => typeof value === 'string'))
-  } catch { /* Ignore malformed browser storage. */ }
-  return [...new Set(urls.map((url) => url.trim().replace(/\/+$/, '')).filter(Boolean))]
+    const stored: unknown = JSON.parse(storage.getItem(serviceURLsKey) ?? '[]')
+    return Array.isArray(stored) ? stored.filter((value): value is string => typeof value === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+export function savedServiceURLs(configured: string | undefined, origin: string, storage?: Pick<Storage, 'getItem'>): string[] {
+  const urls = [defaultServiceURL(configured, origin), ...readStoredServiceURLs(storage ?? localStorage)]
+  return [...new Set(urls.map(normalizeServiceURL).filter(Boolean))]
 }
 
 export function rememberServiceURL(url: string, storage?: Pick<Storage, 'getItem' | 'setItem'>): string[] {
-  const normalized = url.trim().replace(/\/+$/, '')
+  const normalized = normalizeServiceURL(url)
   const target = storage ?? localStorage
-  let previous: unknown = []
-  try {
-    previous = JSON.parse(target.getItem(serviceURLsKey) ?? '[]')
-  } catch { /* Replace malformed stored history with the successful URL. */ }
-  const urls = [...new Set([normalized, ...(Array.isArray(previous) ? previous.filter((value): value is string => typeof value === 'string') : [])].filter(Boolean))].slice(0, 20)
+  const urls = [...new Set([normalized, ...readStoredServiceURLs(target)].filter(Boolean))].slice(0, MAX_SAVED_SERVICE_URLS)
   try { target.setItem(serviceURLsKey, JSON.stringify(urls)) } catch { /* Keep the connected URL available in memory. */ }
   return urls
 }
@@ -50,8 +59,7 @@ export class ServiceAPI {
 
   async request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const target = new URL(this.baseURL)
-    const localHosts = new Set(['localhost', '127.0.0.1', '[::1]', '::1'])
-    if (target.protocol !== 'https:' && !(target.protocol === 'http:' && (localHosts.has(target.hostname) || this.allowInsecureHTTP))) {
+    if (target.protocol !== 'https:' && !(target.protocol === 'http:' && (LOOPBACK_HOSTS.has(target.hostname) || this.allowInsecureHTTP))) {
       throw new Error('Service URL must use HTTPS unless it points to a loopback address')
     }
     const response = await fetch(`${this.baseURL}${path}`, {
@@ -88,7 +96,7 @@ export class ServiceAPI {
     )
     return Object.values(result.peers ?? {}).sort((a, b) => a.node_id.localeCompare(b.node_id))
   }
-  async peerConfig(networkID: string, peerID: string): Promise<Record<string, unknown> | null> {
+  async peerConfig(networkID: string, peerID: string): Promise<PeerConfig | null> {
     try {
       return await this.request(`/api/v1/networks/${encodeURIComponent(networkID)}/nodes/${encodeURIComponent(peerID)}/config`)
     } catch (error) {
@@ -96,7 +104,7 @@ export class ServiceAPI {
       throw error
     }
   }
-  async savePeerConfig(networkID: string, peerID: string, config: Record<string, unknown>): Promise<void> {
+  async savePeerConfig(networkID: string, peerID: string, config: PeerConfig): Promise<void> {
     await this.request(`/api/v1/networks/${encodeURIComponent(networkID)}/nodes/${encodeURIComponent(peerID)}/config`, {
       method: 'PUT', body: JSON.stringify(config),
     })
