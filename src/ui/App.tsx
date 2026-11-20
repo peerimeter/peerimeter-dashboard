@@ -75,7 +75,7 @@ const saved = (): Credentials => {
 }
 const slug = (value: string) => value.toLowerCase().trim().replace(/[^a-z0-9_.-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 128)
 const shortKey = (key: string) => key ? `${key.slice(0, 10)}…${key.slice(-6)}` : '—'
-const peerDeletionKey = (networkID: string, peerID: string) => JSON.stringify([networkID, peerID])
+const peerDeletionKey = (serviceID: string, networkID: string, peerID: string) => JSON.stringify([serviceID, networkID, peerID])
 
 export function App() {
   const [credentials, setCredentials] = useState(saved)
@@ -331,7 +331,7 @@ export function App() {
     const client = api
     const peerID = active.node_id
     const networkID = selectedID
-    const deletionKey = peerDeletionKey(networkID, peerID)
+    const deletionKey = peerDeletionKey(client.baseURL, networkID, peerID)
     if (deletingPeerKeysRef.current.has(deletionKey)) return
     deletingPeerKeysRef.current.add(deletionKey)
     setDeletingPeerKeys((current) => new Set(current).add(deletionKey))
@@ -473,7 +473,7 @@ export function App() {
           copied={copied}
           error={error}
           busy={busy}
-          deletingPeer={Boolean(active && deletingPeerKeys.has(peerDeletionKey(selectedID, active.node_id)))}
+          deletingPeer={Boolean(api && active && deletingPeerKeys.has(peerDeletionKey(api.baseURL, selectedID, active.node_id)))}
           onClose={closeModal}
           onCreateNetwork={createNetwork}
           onSavePeer={savePeer}
