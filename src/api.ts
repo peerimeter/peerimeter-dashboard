@@ -136,6 +136,9 @@ export class ServiceAPI {
       method: 'PUT', body: JSON.stringify(config),
     })
   }
+  async deletePeer(networkID: string, peerID: string): Promise<void> {
+    await this.requestVoid(`/api/v1/networks/${encodeURIComponent(networkID)}/nodes/${encodeURIComponent(peerID)}`, { method: 'DELETE' })
+  }
   async joinToken(networkID: string): Promise<string> {
     const result = await this.requestJSON<{ token: string }>(`/api/v1/join-bundle?network_id=${encodeURIComponent(networkID)}`)
     return result.token

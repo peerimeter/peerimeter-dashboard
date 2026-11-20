@@ -3,7 +3,8 @@
 The Peerimeter Dashboard is a small React and TypeScript control panel for the
 current Peerimeter Service API. It supports API-key sign-in, creating and
 listing managed networks, listing registered peers, editing peer display
-metadata, and copying install/join commands for Linux, macOS, and Windows.
+metadata, deleting peers, and copying install/join commands for Linux, macOS,
+and Windows.
 
 ![Slow demonstration of dashboard sign-in, network creation, peer editing, and join commands](public/dashboard-demo.gif)
 
@@ -12,10 +13,11 @@ metadata, and copying install/join commands for Linux, macOS, and Windows.
 The dashboard follows the service's current shared-key API. The API key has
 access to every network and registration. It is kept in browser `sessionStorage`
 for the active tab session and is removed when the user disconnects. Peer
-registration details are read-only: the service has no revoke, rename, or
-registration update endpoint. The dashboard saves a display name and notes as
-the peer's version 1 node config document. Network deletion and network edits
-are not supported by the current API.
+registration details are read-only. The dashboard saves a display name and
+notes as the peer's version 1 node config document. Deleting a peer revokes its
+registration and removes its saved node config; the agent must join again to
+reconnect. Network deletion and network edits are not supported by the current
+API.
 
 The service does not enable cross-origin browser requests by default. Set
 `PEERIMETER_CORS_ALLOWED_ORIGINS` in the service environment to a comma-separated

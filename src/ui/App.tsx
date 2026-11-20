@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Activity, ArrowUpRight, Check, ChevronRight, CircleHelp, Copy, Cpu, Eye, EyeOff, Globe2, KeyRound, LogOut, Plus, RefreshCw, Search, Shield, Users, X } from 'lucide-react'
 import { defaultServiceURL, joinCommands, normalizeServiceURL, rememberServiceURL, savedServiceURLs, ServiceAPI } from '../api'
+import './delete-peer.css'
 import type { Network, Peer, PeerConfig } from '../api'
 
 type Credentials = { url: string; key: string }
@@ -34,6 +35,7 @@ function useDashboardModal() {
   const [modal, setModal] = useState<'network' | 'peer' | 'join' | null>(null)
   const [peerConfig, setPeerConfig] = useState<PeerConfig>({ version: 1 })
   const [peerConfigLoaded, setPeerConfigLoaded] = useState(false)
+  const [peerConfigLoadFailed, setPeerConfigLoadFailed] = useState(false)
   const [joinToken, setJoinToken] = useState('')
   const [showJoinToken, setShowJoinToken] = useState(false)
 
@@ -42,6 +44,7 @@ function useDashboardModal() {
     setModal(null)
     setPeerConfig({ version: 1 })
     setPeerConfigLoaded(false)
+    setPeerConfigLoadFailed(false)
     setJoinToken('')
     setShowJoinToken(false)
   }
@@ -55,6 +58,8 @@ function useDashboardModal() {
     setPeerConfig,
     peerConfigLoaded,
     setPeerConfigLoaded,
+    peerConfigLoadFailed,
+    setPeerConfigLoadFailed,
     joinToken,
     setJoinToken,
     showJoinToken,
@@ -97,6 +102,8 @@ export function App() {
     peerConfig,
     setPeerConfig,
     peerConfigLoaded,
+    peerConfigLoadFailed,
+    setPeerConfigLoadFailed,
     setPeerConfigLoaded,
     joinToken,
     setJoinToken,
@@ -110,6 +117,13 @@ export function App() {
   const [notice, setNotice] = useState('')
   const [copied, setCopied] = useState('')
   const { peerLoadID, refreshLoadID, serviceVersionLoadID, sessionID, peerNameEditID, peerConfigLoadID, joinLoadID } = useDashboardRequestState()
+
+  const selectedIDRef = useRef(selectedID)
+  const modalRef = useRef(modal)
+  const activePeerIDRef = useRef(active?.node_id)
+  selectedIDRef.current = selectedID
+  modalRef.current = modal
+  activePeerIDRef.current = active?.node_id
 
   const selected = networks.find((network) => network.id === selectedID) ?? null
   const peerCountLabel = peersLoadFailed ? '—' : String(peers.length)
@@ -263,12 +277,17 @@ export function App() {
   async function openPeer(peer: Peer) {
     const isPeerConfigCurrent = beginRequest(peerConfigLoadID, sessionID)
     const networkID = selectedID
-    setActive(peer); setPeerConfig({ version: 1 }); setPeerConfigLoaded(false); setError(''); setModal('peer')
+    setActive(peer); setPeerConfig({ version: 1 }); setPeerConfigLoaded(false); setPeerConfigLoadFailed(false); setError(''); setModal('peer')
     try {
       const config = await api?.peerConfig(networkID, peer.node_id)
       if (!isPeerConfigCurrent()) return
       setPeerConfig(config ?? { version: 1, name: peer.node_id, notes: '' }); setPeerConfigLoaded(true)
-    } catch (cause) { if (isPeerConfigCurrent()) setError(cause instanceof Error ? cause.message : 'Could not load peer details') }
+    } catch (cause) {
+      if (isPeerConfigCurrent()) {
+        setPeerConfigLoadFailed(true)
+        setError(cause instanceof Error ? cause.message : 'Could not load peer details')
+      }
+    }
   }
 
   async function createNetwork(event: React.FormEvent<HTMLFormElement>) {
@@ -302,6 +321,35 @@ export function App() {
       setPeerConfig(config); setPeerNames((previous) => ({ ...previous, [active.node_id]: String(config.name) })); closeModal(); setNotice('Peer details saved')
     } catch (cause) { if (isSavePeerCurrent()) setError(cause instanceof Error ? cause.message : 'Could not save peer') }
     finally { if (isSavePeerCurrent()) setBusy(false) }
+  }
+
+  async function deletePeer() {
+    if (!api || !active) return
+    const client = api
+    const peerID = active.node_id
+    const networkID = selectedID
+    const requestSessionID = sessionID.current
+    const modalInstanceID = peerConfigLoadID.current
+    const isDeleteSessionCurrent = () => sessionID.current === requestSessionID
+    const isDeleteModalCurrent = () => isDeleteSessionCurrent()
+      && peerConfigLoadID.current === modalInstanceID
+      && selectedIDRef.current === networkID
+      && modalRef.current === 'peer'
+      && activePeerIDRef.current === peerID
+    setBusy(true); setError('')
+    try {
+      await client.deletePeer(networkID, peerID)
+      if (!isDeleteSessionCurrent()) return
+      if (isDeleteModalCurrent()) closeModal()
+      setNotice('Peer deleted')
+      if (selectedIDRef.current === networkID) {
+        peerLoadID.current++
+        peerNameEditID.current = { ...peerNameEditID.current, [peerID]: (peerNameEditID.current[peerID] ?? 0) + 1 }
+        setPeerNames((previous) => { const next = { ...previous }; delete next[peerID]; return next })
+        await loadPeers(client, networkID, () => isDeleteSessionCurrent() && selectedIDRef.current === networkID)
+      }
+    } catch (cause) { if (isDeleteSessionCurrent()) setError(cause instanceof Error ? cause.message : 'Could not delete peer') }
+    finally { if (isDeleteSessionCurrent()) setBusy(false) }
   }
 
   async function showJoin() {
@@ -403,6 +451,7 @@ export function App() {
           selected={selected}
           peerConfig={peerConfig}
           peerConfigLoaded={peerConfigLoaded}
+          peerConfigLoadFailed={peerConfigLoadFailed}
           join={join}
           joinToken={joinToken}
           showJoinToken={showJoinToken}
@@ -412,6 +461,7 @@ export function App() {
           onClose={closeModal}
           onCreateNetwork={createNetwork}
           onSavePeer={savePeer}
+          onDeletePeer={deletePeer}
           onToggleJoinToken={() => setShowJoinToken((shown) => !shown)}
           onCopy={(text, label) => void copy(text, label)}
         />
@@ -590,6 +640,7 @@ type DashboardModalProps = {
   selected: Network | null
   peerConfig: PeerConfig
   peerConfigLoaded: boolean
+  peerConfigLoadFailed: boolean
   join: ReturnType<typeof joinCommands> | null
   joinToken: string
   showJoinToken: boolean
@@ -599,6 +650,7 @@ type DashboardModalProps = {
   onClose: () => void
   onCreateNetwork: React.FormEventHandler<HTMLFormElement>
   onSavePeer: React.FormEventHandler<HTMLFormElement>
+  onDeletePeer: () => void
   onToggleJoinToken: () => void
   onCopy: (text: string, label: string) => void
 }
@@ -648,15 +700,29 @@ function NetworkModal({ error, busy, onCreateNetwork, onClose }: DashboardModalP
   </form>
 }
 
-function PeerModal({ active, peerConfig, peerConfigLoaded, error, busy, onSavePeer, onClose }: DashboardModalProps & { active: Peer }) {
-  return <form className="form-stack modal-body" onSubmit={onSavePeer}>
+function PeerModal({ active, peerConfig, peerConfigLoaded, peerConfigLoadFailed, error, busy, onSavePeer, onDeletePeer, onClose }: DashboardModalProps & { active: Peer }) {
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const submitPeerForm = (event: React.FormEvent<HTMLFormElement>) => {
+    if (confirmingDelete || busy) {
+      event.preventDefault()
+      return
+    }
+    onSavePeer(event)
+  }
+
+  return <form className="form-stack modal-body" onSubmit={submitPeerForm}>
     <div className="peer-detail-card"><div className="peer-avatar large"><Cpu size={19} /></div><div><b>{active.node_id}</b><small>{active.tunnel_address || 'Address pending'} · {active.public_endpoint || 'Endpoint not reported'}</small></div></div>
-    <label>Display name<input name="name" maxLength={128} defaultValue={String(peerConfig.name ?? active.node_id)} placeholder="Build server" /></label>
-    <label>Notes<textarea name="notes" rows={3} maxLength={1000} defaultValue={String(peerConfig.notes ?? '')} placeholder="Optional notes about this peer" /></label>
+    <label>Display name<input name="name" maxLength={128} disabled={busy || confirmingDelete} defaultValue={String(peerConfig.name ?? active.node_id)} placeholder="Build server" /></label>
+    <label>Notes<textarea name="notes" rows={3} maxLength={1000} disabled={busy || confirmingDelete} defaultValue={String(peerConfig.notes ?? '')} placeholder="Optional notes about this peer" /></label>
     <div className="peer-facts"><span>Agent version <code>{active.agent_cli_version || '—'}</code></span><span>Primary interface <code>{active.primary_interface || '—'} · {active.local_addresses?.join(', ') || '—'}</code></span><span>Public key <code>{shortKey(active.public_key)}</code></span><span>Listen port <code>{active.listen_port ?? '—'}</code></span></div>
-    <p className="readonly-note">Peer records are created by agents. The service currently does not support revoking a registered peer.</p>
+    <p className="readonly-note">Deleting this peer revokes its registration and removes its saved details. The agent must join this network again to reconnect.</p>
     <ModalError error={error} />
-    <div className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>Close</button><button className="button primary" disabled={busy || !peerConfigLoaded}>{busy ? 'Saving…' : 'Save details'}</button></div>
+    {confirmingDelete && <p className="delete-confirmation" role="alert">Delete <b>{active.node_id}</b> from this network? This action cannot be undone.</p>}
+    <div className="modal-actions">
+      {confirmingDelete
+        ? <><button type="button" className="button secondary" disabled={busy} onClick={() => setConfirmingDelete(false)}>Cancel</button><button type="button" className="button danger" disabled={busy} onClick={onDeletePeer}>{busy ? 'Deleting…' : 'Confirm delete'}</button></>
+        : <><button type="button" className="button secondary" onClick={onClose}>Close</button><button type="button" className="button danger" disabled={busy || (!peerConfigLoaded && !peerConfigLoadFailed)} onClick={() => setConfirmingDelete(true)}>Delete peer</button><button className="button primary" disabled={busy || !peerConfigLoaded}>{busy ? 'Saving…' : 'Save details'}</button></>}
+    </div>
   </form>
 }
 
