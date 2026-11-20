@@ -547,7 +547,7 @@ function PeersTableSection({ selected, peers, peerNames, filteredPeers, peersLoa
 
 function PeerTableSkeleton() {
   return <div className="table-wrap peer-skeleton" role="status" aria-label="Loading peers">
-    <table aria-hidden="true"><thead><tr><th>PEER</th><th>AGENT-CLI</th><th>TUNNEL ADDRESS</th><th>ENDPOINT</th><th>LISTEN PORT</th><th></th></tr></thead><tbody>
+    <table aria-hidden="true"><thead><tr><th>PEER</th><th>AGENT VERSION</th><th>TUNNEL ADDRESS</th><th>ENDPOINT</th><th>LISTEN PORT</th><th></th></tr></thead><tbody>
       {[0, 1, 2, 3].map((row) => <tr key={row}>
         <td><div className="peer-name"><span className="skeleton-avatar" /><span className="skeleton-copy"><span className="skeleton-bar skeleton-peer-title" /><span className="skeleton-bar skeleton-peer-subtitle" /></span></div></td>
         <td><span className="skeleton-bar skeleton-address" /></td><td><span className="skeleton-bar skeleton-address" /></td><td><span className="skeleton-bar skeleton-endpoint" /></td><td><span className="skeleton-bar skeleton-port" /></td><td><span className="skeleton-bar skeleton-action" /></td>
@@ -571,7 +571,7 @@ function PeerTable({ peers, peerNames, search, onOpenPeer }: {
   onOpenPeer: (peer: Peer) => void
 }) {
   return <div className="table-wrap">
-    <table><thead><tr><th>PEER</th><th>AGENT-CLI</th><th>TUNNEL ADDRESS</th><th>ENDPOINT</th><th>LISTEN PORT</th><th></th></tr></thead><tbody>
+    <table><thead><tr><th>PEER</th><th>AGENT VERSION</th><th>TUNNEL ADDRESS</th><th>ENDPOINT</th><th>LISTEN PORT</th><th></th></tr></thead><tbody>
       {peers.map((peer) => <tr key={peer.node_id} onClick={() => onOpenPeer(peer)}>
         <td><div className="peer-name"><span className="peer-avatar"><Cpu size={15} /></span><span><b>{peerNames[peer.node_id] || peer.node_id}</b><small>{shortKey(peer.public_key)}</small></span></div></td>
         <td>{peer.agent_cli_version ?? '—'}</td>
@@ -653,7 +653,7 @@ function PeerModal({ active, peerConfig, peerConfigLoaded, error, busy, onSavePe
     <div className="peer-detail-card"><div className="peer-avatar large"><Cpu size={19} /></div><div><b>{active.node_id}</b><small>{active.tunnel_address || 'Address pending'} · {active.public_endpoint || 'Endpoint not reported'}</small></div></div>
     <label>Display name<input name="name" maxLength={128} defaultValue={String(peerConfig.name ?? active.node_id)} placeholder="Build server" /></label>
     <label>Notes<textarea name="notes" rows={3} maxLength={1000} defaultValue={String(peerConfig.notes ?? '')} placeholder="Optional notes about this peer" /></label>
-    <div className="peer-facts"><span>Primary interface <code>{active.primary_interface || '—'} · {active.local_addresses?.join(', ') || '—'}</code></span><span>Public key <code>{shortKey(active.public_key)}</code></span><span>Listen port <code>{active.listen_port ?? '—'}</code></span></div>
+    <div className="peer-facts"><span>Agent version <code>{active.agent_cli_version || '—'}</code></span><span>Primary interface <code>{active.primary_interface || '—'} · {active.local_addresses?.join(', ') || '—'}</code></span><span>Public key <code>{shortKey(active.public_key)}</code></span><span>Listen port <code>{active.listen_port ?? '—'}</code></span></div>
     <p className="readonly-note">Peer records are created by agents. The service currently does not support revoking a registered peer.</p>
     <ModalError error={error} />
     <div className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>Close</button><button className="button primary" disabled={busy || !peerConfigLoaded}>{busy ? 'Saving…' : 'Save details'}</button></div>
