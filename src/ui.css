@@ -47,3 +47,4 @@ td{font-size:12px}
 .stat-label{grid-column:1;grid-row:1;min-width:0}
 .stat-value{grid-column:1/-1;grid-row:2}
 .stat-card>small{grid-column:1/-1;grid-row:3}
+.skeleton-service-version{display:inline-block;width:58px;height:8px;vertical-align:middle}
