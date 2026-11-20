@@ -8,7 +8,9 @@ export type Peer = {
   local_addresses?: string[]
   primary_interface?: string
   public_endpoint?: string
+  agent_cli_version?: string
 }
+export type ServiceVersion = { version: string }
 export type PeerConfig = { version: number; name?: string; notes?: string; [key: string]: unknown }
 
 const MAX_SAVED_SERVICE_URLS = 20
@@ -96,6 +98,10 @@ export class ServiceAPI {
   }
 
   async verify(): Promise<Network[]> { return this.networks() }
+  async version(): Promise<string> {
+    const result = await this.request<ServiceVersion>('/api/v1/version')
+    return result.version
+  }
   async networks(): Promise<Network[]> {
     const result = await this.request<{ networks: Record<string, Network> }>('/api/v1/networks')
     return Object.values(result.networks ?? {}).sort((a, b) => a.name.localeCompare(b.name))
