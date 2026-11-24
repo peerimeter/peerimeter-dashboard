@@ -139,7 +139,7 @@ function PeerModal({ active, peerConfig, peerConfigLoaded, peerConfigLoadFailed,
         name="name"
         key={peerConfigLoaded ? 'loaded' : 'loading'}
         maxLength={128}
-        disabled={busy || confirmingDelete || deletingPeer}
+        disabled={busy || confirmingDelete || deletingPeer || !peerConfigLoaded}
         defaultValue={String(peerConfig.name ?? active.node_id)}
         placeholder="Build server"
       />
@@ -151,7 +151,7 @@ function PeerModal({ active, peerConfig, peerConfigLoaded, peerConfigLoadFailed,
         key={peerConfigLoaded ? 'loaded' : 'loading'}
         rows={3}
         maxLength={1000}
-        disabled={busy || confirmingDelete || deletingPeer}
+        disabled={busy || confirmingDelete || deletingPeer || !peerConfigLoaded}
         defaultValue={String(peerConfig.notes ?? '')}
         placeholder="Optional notes about this peer"
       />
