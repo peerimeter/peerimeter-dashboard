@@ -30,7 +30,10 @@ export function LoginScreen({ credentials, serviceURLs, error, busy, onCredentia
       <form onSubmit={onSubmit} className="form-stack">
         {serviceURLs.length > 0 && <label>Previously used URL
           <select aria-label="Previous endpoint list" value={selectedURL} onChange={(event) => {
-            if (event.target.value !== '__custom') onCredentialsChange({ ...credentials, url: event.target.value })
+            onCredentialsChange({
+              ...credentials,
+              url: event.target.value === '__custom' ? '' : event.target.value,
+            })
           }}>
             <option value="__custom">Enter a service URL</option>
             {serviceURLs.map((url) => <option key={url} value={url}>{url}</option>)}
