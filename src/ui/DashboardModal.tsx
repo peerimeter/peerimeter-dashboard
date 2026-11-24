@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { Check, Copy, Cpu, Eye, EyeOff, KeyRound, Shield, X } from 'lucide-react'
 import { joinCommands } from '../api'
 import type { Network, Peer, PeerConfig } from '../api'
@@ -27,12 +27,56 @@ type DashboardModalProps = {
 }
 
 export function DashboardModal(props: DashboardModalProps) {
+  const dialogRef = useRef<HTMLElement>(null)
   const closeOnBackdrop = (event: React.MouseEvent<HTMLDivElement>) => {
     if (event.target === event.currentTarget) props.onClose()
   }
+  const manageDialogKeys = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      props.onClose()
+      return
+    }
+    if (event.key !== 'Tab') return
+
+    const focusable = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ) ?? [])
+    if (focusable.length === 0) {
+      event.preventDefault()
+      return
+    }
+
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    const activeIndex = focusable.indexOf(document.activeElement as HTMLElement)
+    if (event.shiftKey && activeIndex <= 0) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && (activeIndex === focusable.length - 1 || activeIndex < 0)) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const firstFocusable = dialogRef.current?.querySelector<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    )
+    firstFocusable?.focus()
+    return () => previouslyFocused?.focus()
+  }, [])
 
   return <div className="modal-backdrop" onMouseDown={closeOnBackdrop}>
-    <section className={`modal ${props.modal === 'join' ? 'join-modal' : ''}`} role="dialog" aria-modal="true">
+    <section
+      ref={dialogRef}
+      className={`modal ${props.modal === 'join' ? 'join-modal' : ''}`}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="dashboard-modal-title"
+      onKeyDown={manageDialogKeys}
+    >
       <ModalHeading {...props} />
       {props.modal === 'network' && <NetworkModal {...props} />}
       {props.modal === 'peer' && props.active && <PeerModal {...props} active={props.active} />}
@@ -46,7 +90,7 @@ function ModalHeading({ modal, active, peerConfig, onClose }: DashboardModalProp
   const title = modal === 'network' ? 'Create a network' : modal === 'peer' ? String(peerConfig.name || active?.node_id || 'Peer') : 'Invite a peer'
 
   return <header className="modal-heading">
-    <div><span className="eyebrow">{label}</span><h2>{title}</h2></div>
+    <div><span className="eyebrow">{label}</span><h2 id="dashboard-modal-title">{title}</h2></div>
     <button className="icon-button" aria-label="Close" onClick={onClose}><X size={17} /></button>
   </header>
 }
@@ -64,7 +108,7 @@ function NetworkModal({ error, busy, onCreateNetwork, onClose }: DashboardModalP
   return <form className="form-stack modal-body" onSubmit={onCreateNetwork}>
     <p className="modal-intro">Choose a name and a private address range for your WireGuard mesh.</p>
     <label>Network name<input name="name" required maxLength={128} placeholder="Engineering mesh" value={name} onChange={(event) => updateName(event.target.value)} /></label>
-    <label>Network ID<input name="id" required maxLength={128} pattern="[A-Za-z0-9_.-]+" placeholder="engineering-mesh" value={id} onChange={(event) => { setID(event.target.value); setIDEdited(true) }} /></label>
+    <label>Network ID<input name="id" required maxLength={128} pattern="[A-Za-z0-9_.\-]+" placeholder="engineering-mesh" value={id} onChange={(event) => { setID(event.target.value); setIDEdited(true) }} /></label>
     <label>Private IPv4 CIDR<input name="cidr" required defaultValue="10.90.0.0/24" placeholder="10.90.0.0/24" /><small>Canonical private IPv4 range from /8 through /30. It must not overlap another network.</small></label>
     <ModalError error={error} />
     <div className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>Cancel</button><button className="button primary" disabled={busy}>{busy ? 'Creating…' : 'Create network'}</button></div>
@@ -93,6 +137,7 @@ function PeerModal({ active, peerConfig, peerConfigLoaded, peerConfigLoadFailed,
       Display name
       <input
         name="name"
+        key={peerConfigLoaded ? 'loaded' : 'loading'}
         maxLength={128}
         disabled={busy || confirmingDelete || deletingPeer}
         defaultValue={String(peerConfig.name ?? active.node_id)}
@@ -103,6 +148,7 @@ function PeerModal({ active, peerConfig, peerConfigLoaded, peerConfigLoadFailed,
       Notes
       <textarea
         name="notes"
+        key={peerConfigLoaded ? 'loaded' : 'loading'}
         rows={3}
         maxLength={1000}
         disabled={busy || confirmingDelete || deletingPeer}
