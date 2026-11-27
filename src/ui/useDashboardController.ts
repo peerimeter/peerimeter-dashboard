@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { defaultServiceURL, joinCommands, rememberServiceURL, savedServiceURLs, ServiceAPI } from '../api'
-import type { Network, Peer, PeerConfig } from '../api'
+import type { AuthSession, Network, Peer, PeerConfig } from '../api'
 import { slug } from './format'
 
 type Credentials = { url: string; key: string; authMode?: 'session' | 'password' | 'github' }
@@ -89,6 +89,7 @@ export function useDashboardController() {
   })
   const [api, setAPI] = useState<ServiceAPI | null>(null)
   const [username, setUsername] = useState('')
+  const [authMethod, setAuthMethod] = useState<AuthSession['auth_method']>('api_key')
   const [networks, setNetworks] = useState<Network[]>([])
   const [serviceVersion, setServiceVersion] = useState('')
   const [serviceVersionLoading, setServiceVersionLoading] = useState(false)
@@ -241,18 +242,19 @@ export function useDashboardController() {
         await client.exchangeAPIKey(current.key)
         const sessionClient = new ServiceAPI(current.url, '', 'session')
         const session = await sessionClient.session()
-        return { client: sessionClient, items: await sessionClient.verify(), username: session.username }
+        return { client: sessionClient, items: await sessionClient.verify(), session }
       }
       const session = await client.session()
-      return { client, items: await client.verify(), username: session.username }
+      return { client, items: await client.verify(), session }
     }
-    restore().then(async ({ client: restoredClient, items, username: restoredUsername }) => {
+    restore().then(async ({ client: restoredClient, items, session: restoredSession }) => {
       if (!restoreActive) return
       await refresh(restoredClient, '', () => restoreActive, items)
       if (!restoreActive) return
       setCredentials({ url: current.url, key: '', authMode: 'session' })
       sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ url: current.url, key: '', authMode: 'session' }))
-      setUsername(restoredUsername)
+      setUsername(restoredSession.username)
+      setAuthMethod(restoredSession.auth_method)
       setAPI(restoredClient)
       setCheckingSession(false)
     }).catch(() => {
@@ -287,6 +289,7 @@ export function useDashboardController() {
       sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionCredentials))
       setCredentials(sessionCredentials)
       setUsername(verifiedSession.username)
+      setAuthMethod(verifiedSession.auth_method)
       setServiceURLs([...new Set([...savedServiceURLs(configuredServiceURL, location.origin), ...rememberServiceURL(signedInCredentials.url)])])
       setAPI(client); await refresh(client, '', isSignInCurrent)
     } catch (cause) { if (isSignInCurrent()) setError(cause instanceof Error ? cause.message : 'Could not connect to Peerimeter Service') }
@@ -478,6 +481,7 @@ export function useDashboardController() {
     sessionStorage.removeItem(SESSION_STORAGE_KEY)
     setAPI(null)
     setUsername('')
+    setAuthMethod('api_key')
     serviceVersionLoadID.current++
     setServiceVersion('')
     setServiceVersionLoading(false)
@@ -495,7 +499,7 @@ export function useDashboardController() {
   }
 
   return {
-    credentials, setCredentials, serviceURLs, checkingSession, api, username, networks,
+    credentials, setCredentials, serviceURLs, checkingSession, api, username, authMethod, networks,
     serviceVersion, serviceVersionLoading, selectedID, peers, peersLoading,
     peersLoadFailed, networksLoading, networksLoadFailed, peerNames, active,
     modal, peerConfig, peerConfigLoaded, peerConfigLoadFailed, joinToken,

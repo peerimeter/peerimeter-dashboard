@@ -3,9 +3,10 @@ import type { Network } from '../api'
 import { ServiceAPI } from '../api'
 import { ServiceVersionText } from './ServiceVersionText'
 
-export function Sidebar({ api, username, serviceVersion, serviceVersionLoading, networks, selectedID, loading, failed, onCreateNetwork, onSelectNetwork, onSignOut }: {
+export function Sidebar({ api, username, authMethod, serviceVersion, serviceVersionLoading, networks, selectedID, loading, failed, onCreateNetwork, onSelectNetwork, onSignOut }: {
   api: ServiceAPI
   username: string
+  authMethod: 'api_key' | 'github'
   serviceVersion: string
   serviceVersionLoading: boolean
   networks: Network[]
@@ -34,7 +35,7 @@ export function Sidebar({ api, username, serviceVersion, serviceVersionLoading, 
       {networks.length === 0 && <p className="empty-nav">{loading ? 'Loading networks…' : failed ? 'Could not load networks' : 'No networks yet'}</p>}
     </nav>
     <div className="sidebar-bottom">
-      <div className="signed-in-user">Signed in as <b>{username || 'superadmin'}</b></div>
+      <div className="signed-in-user"><span>Signed in as</span><strong>{username || 'superadmin'}</strong><small>{authMethod === 'github' ? 'GitHub SSO' : 'API key'}</small></div>
       <a className="help-card" href="https://github.com/peerimeter/.github/blob/main/README.md#quick-setup-register-agents-through-the-service" target="_blank" rel="noreferrer">
         <CircleHelp size={16} /><span><b>Need a hand?</b><small>Read the setup guide</small></span><ArrowUpRight size={13} />
       </a>
