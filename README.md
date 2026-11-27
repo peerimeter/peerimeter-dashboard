@@ -26,7 +26,8 @@ The service does not enable cross-origin browser requests by default. Set
 list of exact dashboard origins (scheme and host, optional port; no path or
 wildcard) when hosting the app separately. The dashboard origin must be
 included. Alternatively, serve this static app and the service API behind one
-HTTPS origin with a reverse proxy forwarding `/api/` to `peerimeter-service`.
+HTTPS origin with a reverse proxy forwarding `/api/` and `/auth/` to
+`peerimeter-service`.
 The API key is a shared credential; use HTTPS and restrict access to trusted
 dashboard origins.
 
@@ -93,7 +94,7 @@ need a running Peerimeter deployment. Install the browser and system
 dependencies with `npx playwright install --with-deps chromium` before running
 `npm run test:e2e`. `npm run test:ui` opens Playwright's
 interactive test runner. Configure your web server to serve the dashboard files and reverse
-proxy `/api/` to the Peerimeter Service on the same host and HTTPS origin. The
+proxy `/api/` and `/auth/` to the Peerimeter Service on the same host and HTTPS origin. The
 dashboard defaults its service URL to the current origin; on sign-in, provide
 the origin that exposes the API root.
 
