@@ -2,6 +2,11 @@ import { ChevronRight, Cpu, Globe2, Plus, RefreshCw, Search } from 'lucide-react
 import type { Network, Peer } from '../api'
 import { shortKey } from './format'
 
+const lastActiveDateTimeFormatter = new Intl.DateTimeFormat('sv-SE', {
+  year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+})
+
 export function WelcomeSection({ loading, failed, onRefresh, onCreateNetwork }: {
   loading: boolean
   failed: boolean
@@ -74,6 +79,13 @@ function EmptyPeerList({ onJoin }: { onJoin: () => void }) {
   return <div className="empty-state"><div className="empty-icon"><Cpu size={21} /></div><h3>No peers connected yet</h3><p>Add a peer to get its install and join commands.</p><button className="button primary" onClick={onJoin}><Plus size={15} /> Add a peer</button></div>
 }
 
+function formatLastActive(value?: string): string {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '—'
+  return lastActiveDateTimeFormatter.format(date)
+}
+
 function PeerTable({ peers, peerNames, search, onOpenPeer }: {
   peers: Peer[]
   peerNames: Record<string, string>
@@ -85,7 +97,7 @@ function PeerTable({ peers, peerNames, search, onOpenPeer }: {
       {peers.map((peer) => <tr key={peer.node_id} onClick={() => onOpenPeer(peer)}>
         <td><div className="peer-name"><span className="peer-avatar"><Cpu size={15} /></span><span><b>{peerNames[peer.node_id] || peer.node_id}</b><small>{shortKey(peer.public_key)}</small></span></div></td>
         <td>{peer.agent_cli_version ?? '—'}</td>
-        <td>{peer.last_active && !Number.isNaN(Date.parse(peer.last_active)) ? new Date(peer.last_active).toISOString().slice(0, 10) : '—'}</td>
+        <td>{formatLastActive(peer.last_active)}</td>
         <td><code>{peer.tunnel_address ?? '—'}</code></td>
         <td><span className="endpoint"><i />{peer.public_endpoint || peer.local_addresses?.[0] || 'No address'}</span></td>
         <td>{peer.listen_port ?? '—'}</td><td><button className="row-action" aria-label={`Edit ${peer.node_id}`}><ChevronRight size={16} /></button></td>
