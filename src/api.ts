@@ -3,6 +3,7 @@ export type Peer = {
   version: number
   node_id: string
   public_key: string
+  last_active?: string
   tunnel_address?: string
   listen_port?: number
   local_addresses?: string[]

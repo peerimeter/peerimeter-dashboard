@@ -57,10 +57,10 @@ export function PeersTableSection({ selected, peers, peerNames, filteredPeers, p
 
 function PeerTableSkeleton() {
   return <div className="table-wrap peer-skeleton" role="status" aria-label="Loading peers">
-    <table aria-hidden="true"><thead><tr><th>PEER</th><th>AGENT VERSION</th><th>TUNNEL ADDRESS</th><th>ENDPOINT</th><th>LISTEN PORT</th><th></th></tr></thead><tbody>
+    <table aria-hidden="true"><thead><tr><th>PEER</th><th>AGENT VERSION</th><th>LAST ACTIVE</th><th>TUNNEL ADDRESS</th><th>ENDPOINT</th><th>LISTEN PORT</th><th></th></tr></thead><tbody>
       {[0, 1, 2, 3].map((row) => <tr key={row}>
         <td><div className="peer-name"><span className="skeleton-avatar" /><span className="skeleton-copy"><span className="skeleton-bar skeleton-peer-title" /><span className="skeleton-bar skeleton-peer-subtitle" /></span></div></td>
-        <td><span className="skeleton-bar skeleton-address" /></td><td><span className="skeleton-bar skeleton-address" /></td><td><span className="skeleton-bar skeleton-endpoint" /></td><td><span className="skeleton-bar skeleton-port" /></td><td><span className="skeleton-bar skeleton-action" /></td>
+        <td><span className="skeleton-bar skeleton-address" /></td><td><span className="skeleton-bar skeleton-address" /></td><td><span className="skeleton-bar skeleton-address" /></td><td><span className="skeleton-bar skeleton-endpoint" /></td><td><span className="skeleton-bar skeleton-port" /></td><td><span className="skeleton-bar skeleton-action" /></td>
       </tr>)}
     </tbody></table>
   </div>
@@ -81,10 +81,11 @@ function PeerTable({ peers, peerNames, search, onOpenPeer }: {
   onOpenPeer: (peer: Peer) => void
 }) {
   return <div className="table-wrap">
-    <table><thead><tr><th>PEER</th><th>AGENT VERSION</th><th>TUNNEL ADDRESS</th><th>ENDPOINT</th><th>LISTEN PORT</th><th></th></tr></thead><tbody>
+    <table><thead><tr><th>PEER</th><th>AGENT VERSION</th><th>LAST ACTIVE</th><th>TUNNEL ADDRESS</th><th>ENDPOINT</th><th>LISTEN PORT</th><th></th></tr></thead><tbody>
       {peers.map((peer) => <tr key={peer.node_id} onClick={() => onOpenPeer(peer)}>
         <td><div className="peer-name"><span className="peer-avatar"><Cpu size={15} /></span><span><b>{peerNames[peer.node_id] || peer.node_id}</b><small>{shortKey(peer.public_key)}</small></span></div></td>
         <td>{peer.agent_cli_version ?? '—'}</td>
+        <td>{peer.last_active && !Number.isNaN(Date.parse(peer.last_active)) ? new Date(peer.last_active).toLocaleString() : '—'}</td>
         <td><code>{peer.tunnel_address ?? '—'}</code></td>
         <td><span className="endpoint"><i />{peer.public_endpoint || peer.local_addresses?.[0] || 'No address'}</span></td>
         <td>{peer.listen_port ?? '—'}</td><td><button className="row-action" aria-label={`Edit ${peer.node_id}`}><ChevronRight size={16} /></button></td>
