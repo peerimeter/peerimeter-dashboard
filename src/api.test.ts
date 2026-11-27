@@ -26,6 +26,24 @@ describe('ServiceAPI', () => {
     }))
   })
 
+  it('exchanges an API key for a cookie session without putting the key in headers', async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ username: 'superadmin', auth_method: 'api_key' }), { status: 200 }))
+    vi.stubGlobal('fetch', fetcher)
+    await new ServiceAPI('https://service.example.com', 'unused').exchangeAPIKey('secret-key')
+    expect(fetcher).toHaveBeenCalledWith('https://service.example.com/api/v1/auth/login', expect.objectContaining({
+      method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: 'secret-key' }),
+    }))
+  })
+
+  it('reads the signed session identity using cookie credentials', async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ username: 'octocat', auth_method: 'github' }), { status: 200 }))
+    vi.stubGlobal('fetch', fetcher)
+    const session = await new ServiceAPI('https://service.example.com', '', 'session').session()
+    expect(session.username).toBe('octocat')
+    expect(fetcher).toHaveBeenCalledWith('https://service.example.com/api/v1/auth/session', expect.objectContaining({ credentials: 'include', headers: {} }))
+  })
+
   it('revokes GitHub sessions and surfaces logout failures', async () => {
     const fetcher = vi.fn().mockResolvedValueOnce(new Response(null, { status: 204 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ error: 'untrusted origin' }), { status: 403 }))
