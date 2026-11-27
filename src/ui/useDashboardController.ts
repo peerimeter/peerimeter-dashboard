@@ -3,7 +3,7 @@ import { defaultServiceURL, joinCommands, rememberServiceURL, savedServiceURLs, 
 import type { Network, Peer, PeerConfig } from '../api'
 import { slug } from './format'
 
-type Credentials = { url: string; key: string }
+type Credentials = { url: string; key: string; authMode?: 'password' | 'github' }
 const SESSION_STORAGE_KEY = 'peerimeter.session'
 const COPY_RESET_MS = 1_800
 const SESSION_RESTORE_TIMEOUT_MS = 8_000
@@ -85,7 +85,7 @@ export function useDashboardController() {
   const [serviceURLs, setServiceURLs] = useState(() => savedServiceURLs(configuredServiceURL, location.origin))
   const [checkingSession, setCheckingSession] = useState(() => {
     const current = saved()
-    return Boolean(current.key && current.url)
+    return Boolean(current.url && (current.key || current.authMode === 'github'))
   })
   const [api, setAPI] = useState<ServiceAPI | null>(null)
   const [networks, setNetworks] = useState<Network[]>([])
@@ -219,11 +219,11 @@ export function useDashboardController() {
   useEffect(() => {
     const current = saved()
     setCredentials(current)
-    if (!current.key || !current.url) {
+    if ((!current.key && current.authMode !== 'github') || !current.url) {
       setCheckingSession(false)
       return
     }
-    const client = new ServiceAPI(current.url, current.key)
+    const client = new ServiceAPI(current.url, current.key, current.authMode ?? 'password')
     let restoreActive = true
     const timeoutID = window.setTimeout(() => {
       restoreActive = false
@@ -270,6 +270,14 @@ export function useDashboardController() {
       setAPI(client); await refresh(client, '', isSignInCurrent)
     } catch (cause) { if (isSignInCurrent()) setError(cause instanceof Error ? cause.message : 'Could not connect to Peerimeter Service') }
     finally { if (isSignInCurrent()) setBusy(false) }
+  }
+
+  function signInWithGitHub() {
+    const targetURL = credentials.url.trim()
+    if (!targetURL) return
+    const githubCredentials = { url: targetURL, key: '', authMode: 'github' as const }
+    sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(githubCredentials))
+    location.assign(`${targetURL.replace(/\/+$/, '')}/auth/github/login`)
   }
 
   async function selectNetwork(id: string) {
@@ -434,6 +442,10 @@ export function useDashboardController() {
 
   function signOut() {
     sessionID.current++; refreshLoadID.current++; peerLoadID.current++; peerConfigLoadID.current++; joinLoadID.current++
+    const currentAPI = api
+    if (currentAPI?.authMode === 'github') {
+      void fetch(`${currentAPI.baseURL}/api/v1/auth/logout`, { method: 'POST', credentials: 'include' })
+    }
     sessionStorage.removeItem(SESSION_STORAGE_KEY)
     setAPI(null)
     serviceVersionLoadID.current++
@@ -459,7 +471,7 @@ export function useDashboardController() {
     modal, peerConfig, peerConfigLoaded, peerConfigLoadFailed, joinToken,
     showJoinToken, setShowJoinToken, search, setSearch, busy, deletingPeerKeys,
     error, setError, notice, setNotice, copied, selected, peerCountLabel,
-    filteredPeers, join, refresh, signIn, selectNetwork, openPeer, createNetwork,
+    filteredPeers, join, refresh, signIn, signInWithGitHub, selectNetwork, openPeer, createNetwork,
     savePeer, deletePeer, showJoin, openNetworkModal, closeModal, copy, signOut,
     peerDeletionKey,
   }

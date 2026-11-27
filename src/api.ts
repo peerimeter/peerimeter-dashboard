@@ -65,11 +65,13 @@ export class ServiceAPI {
   readonly baseURL: string
   readonly key: string
   readonly allowInsecureHTTP: boolean
+  readonly authMode: 'password' | 'github'
 
-  constructor(baseURL: string, key: string, allowInsecureHTTP = import.meta.env.VITE_ALLOW_INSECURE_HTTP === 'true') {
+  constructor(baseURL: string, key: string, authModeOrAllowInsecureHTTP: 'password' | 'github' | boolean = 'password', allowInsecureHTTP = import.meta.env.VITE_ALLOW_INSECURE_HTTP === 'true') {
     this.baseURL = normalizeServiceURL(baseURL)
     this.key = key
-    this.allowInsecureHTTP = allowInsecureHTTP
+    this.authMode = typeof authModeOrAllowInsecureHTTP === 'boolean' ? 'password' : authModeOrAllowInsecureHTTP
+    this.allowInsecureHTTP = typeof authModeOrAllowInsecureHTTP === 'boolean' ? authModeOrAllowInsecureHTTP : allowInsecureHTTP
   }
 
   private async requestResponse(path: string, init: RequestInit = {}): Promise<Response> {
@@ -79,8 +81,9 @@ export class ServiceAPI {
     }
     const response = await fetch(`${this.baseURL}${path}`, {
       ...init,
+      credentials: this.authMode === 'github' ? 'include' : 'same-origin',
       headers: {
-        Authorization: `Bearer ${this.key}`,
+        ...(this.authMode === 'password' ? { Authorization: `Bearer ${this.key}` } : {}),
         ...(init.body ? { 'Content-Type': 'application/json' } : {}),
         ...init.headers,
       },

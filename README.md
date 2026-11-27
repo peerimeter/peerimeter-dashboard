@@ -1,7 +1,7 @@
 # Peerimeter Dashboard
 
 The Peerimeter Dashboard is a small React and TypeScript control panel for the
-current Peerimeter Service API. It supports API-key sign-in, creating and
+current Peerimeter Service API. It supports API-key or configured GitHub SSO sign-in, creating and
 listing managed networks, listing registered peers, editing peer display
 metadata, deleting peers, and copying install/join commands for Linux, macOS,
 and Windows.
@@ -10,9 +10,11 @@ and Windows.
 
 ## Current API limits
 
-The dashboard follows the service's current shared-key API. The API key has
-access to every network and registration. It is kept in browser `sessionStorage`
-for the active tab session and is removed when the user disconnects. Peer
+The dashboard follows the service's current API. API-key sign-in is controlled
+by the service and defaults off when GitHub SSO is configured. GitHub SSO only
+admits active members of the configured organization team. API keys and the
+selected auth mode are kept in browser `sessionStorage` for the active tab
+session; GitHub sessions use an HttpOnly service cookie. Peer
 registration details are read-only. The dashboard saves a display name and
 notes as the peer's version 1 node config document. Deleting a peer revokes its
 registration and removes its saved node config; the agent must join again to
