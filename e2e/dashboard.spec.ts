@@ -88,6 +88,7 @@ test('API-key login, network creation, peer editing, and platform join commands'
   await expect.poll(() => page.evaluate(() => sessionStorage.getItem('peerimeter.session'))).toContain('"authMode":"session"')
   expect(await page.evaluate(() => sessionStorage.getItem('peerimeter.session'))).not.toContain('test-api-key')
   await expect(page.getByText('superadmin')).toBeVisible()
+  await expect(page.getByText('API key', { exact: true })).toBeVisible()
   expect(await page.evaluate(() => localStorage.getItem('peerimeter.serviceURLs'))).toContain('http://127.0.0.1:5173')
   await page.screenshot({ path: testInfo.outputPath('dashboard-network.png'), fullPage: true })
 
@@ -157,4 +158,27 @@ test('invalid API key stays on the login screen and shows the service error', as
   await page.getByRole('button', { name: 'Connect to service' }).click()
   await expect(page.getByText('unauthorized')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Connect to service' })).toBeVisible()
+})
+
+test('restored GitHub session displays the username and sign-in method', async ({ page }) => {
+  await page.addInitScript(() => {
+    sessionStorage.setItem('peerimeter.session', JSON.stringify({ url: location.origin, key: '', authMode: 'session' }))
+  })
+  await page.route('**/api/v1/**', async (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (path === '/api/v1/auth/session') {
+      await route.fulfill({ json: { username: 'octocat', auth_method: 'github' } })
+    } else if (path === '/api/v1/networks') {
+      await route.fulfill({ json: { version: 1, networks: {} } })
+    } else if (path === '/api/v1/version') {
+      await route.fulfill({ json: { version: 'test' } })
+    } else {
+      await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: 'not found' }) })
+    }
+  })
+
+  await page.goto('/')
+
+  await expect(page.getByText('octocat', { exact: true })).toBeVisible()
+  await expect(page.getByText('GitHub SSO', { exact: true })).toBeVisible()
 })
