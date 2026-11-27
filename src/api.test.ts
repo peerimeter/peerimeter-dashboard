@@ -26,6 +26,18 @@ describe('ServiceAPI', () => {
     }))
   })
 
+  it('revokes GitHub sessions and surfaces logout failures', async () => {
+    const fetcher = vi.fn().mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: 'untrusted origin' }), { status: 403 }))
+    vi.stubGlobal('fetch', fetcher)
+    const api = new ServiceAPI('https://service.example.com', '', 'github')
+    await expect(api.logout()).resolves.toBeUndefined()
+    await expect(api.logout()).rejects.toThrow('untrusted origin')
+    expect(fetcher).toHaveBeenNthCalledWith(1, 'https://service.example.com/api/v1/auth/logout', expect.objectContaining({
+      method: 'POST', credentials: 'include', headers: {},
+    }))
+  })
+
   it('sorts networks by display name', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ networks: {
       z: { version: 1, id: 'z', name: 'Zulu', cidr: '10.2.0.0/24' },

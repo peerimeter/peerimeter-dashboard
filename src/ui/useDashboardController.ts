@@ -440,12 +440,20 @@ export function useDashboardController() {
     catch { setError('Clipboard access is unavailable. Select and copy the command manually.') }
   }
 
-  function signOut() {
-    sessionID.current++; refreshLoadID.current++; peerLoadID.current++; peerConfigLoadID.current++; joinLoadID.current++
+  async function signOut() {
     const currentAPI = api
     if (currentAPI?.authMode === 'github') {
-      void fetch(`${currentAPI.baseURL}/api/v1/auth/logout`, { method: 'POST', credentials: 'include' })
+      setBusy(true)
+      try {
+        await currentAPI.logout()
+      } catch (cause) {
+        setError(cause instanceof Error ? `Could not end GitHub session: ${cause.message}` : 'Could not end GitHub session. Please try again.')
+        setBusy(false)
+        return
+      }
+      setBusy(false)
     }
+    sessionID.current++; refreshLoadID.current++; peerLoadID.current++; peerConfigLoadID.current++; joinLoadID.current++
     sessionStorage.removeItem(SESSION_STORAGE_KEY)
     setAPI(null)
     serviceVersionLoadID.current++

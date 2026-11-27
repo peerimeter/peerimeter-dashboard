@@ -109,6 +109,9 @@ export class ServiceAPI {
   }
 
   async verify(): Promise<Network[]> { return this.networks() }
+  async logout(): Promise<void> {
+    if (this.authMode === 'github') await this.requestVoid('/api/v1/auth/logout', { method: 'POST' })
+  }
   async version(): Promise<string> {
     const result = await this.requestJSON<ServiceVersion>('/api/v1/version')
     return result.version
