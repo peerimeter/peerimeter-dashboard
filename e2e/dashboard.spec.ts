@@ -19,10 +19,25 @@ async function demoPause(page: import('@playwright/test').Page) {
 test('API-key login, network creation, peer editing, and platform join commands', async ({ page }, testInfo) => {
   let networks = [initialNetwork]
   let savedPeer: Record<string, unknown> | null = null
+  let sessionAuthenticated = false
   await page.route('**/api/v1/**', async (route) => {
     const request = route.request()
     const url = new URL(request.url())
-    if (request.headers().authorization !== 'Bearer test-api-key') {
+    if (url.pathname === '/api/v1/auth/login' && request.method() === 'POST') {
+      const { api_key: apiKey } = request.postDataJSON()
+      sessionAuthenticated = apiKey === 'test-api-key'
+      await route.fulfill(apiKey === 'test-api-key'
+        ? { json: { username: 'superadmin', auth_method: 'api_key' } }
+        : { status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'unauthorized' }) })
+      return
+    }
+    if (url.pathname === '/api/v1/auth/session') {
+      await route.fulfill(sessionAuthenticated
+        ? { json: { username: 'superadmin', auth_method: 'api_key' } }
+        : { status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'unauthorized' }) })
+      return
+    }
+    if (!sessionAuthenticated) {
       await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'unauthorized' }) })
       return
     }
@@ -70,7 +85,9 @@ test('API-key login, network creation, peer editing, and platform join commands'
   await expect(page.getByRole('heading', { name: 'Office mesh' })).toBeVisible()
   await demoPause(page)
   await expect(page.getByText('workstation-1')).toBeVisible()
-  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('peerimeter.session'))).toContain('test-api-key')
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('peerimeter.session'))).toContain('"authMode":"session"')
+  expect(await page.evaluate(() => sessionStorage.getItem('peerimeter.session'))).not.toContain('test-api-key')
+  await expect(page.getByText('superadmin')).toBeVisible()
   expect(await page.evaluate(() => localStorage.getItem('peerimeter.serviceURLs'))).toContain('http://127.0.0.1:5173')
   await page.screenshot({ path: testInfo.outputPath('dashboard-network.png'), fullPage: true })
 
@@ -131,7 +148,7 @@ test('API-key login, network creation, peer editing, and platform join commands'
 })
 
 test('invalid API key stays on the login screen and shows the service error', async ({ page }) => {
-  await page.route('**/api/v1/networks', async (route) => {
+  await page.route('**/api/v1/auth/login', async (route) => {
     await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'unauthorized' }) })
   })
   await page.goto('/')
