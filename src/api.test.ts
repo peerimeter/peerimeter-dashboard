@@ -17,6 +17,15 @@ describe('ServiceAPI', () => {
     }))
   })
 
+  it('uses the HttpOnly cookie session for GitHub SSO without sending an API key', async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ networks: {} }), { status: 200 }))
+    vi.stubGlobal('fetch', fetcher)
+    await new ServiceAPI('https://service.example.com', '', 'github').networks()
+    expect(fetcher).toHaveBeenCalledWith('https://service.example.com/api/v1/networks', expect.objectContaining({
+      credentials: 'include', headers: {},
+    }))
+  })
+
   it('sorts networks by display name', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ networks: {
       z: { version: 1, id: 'z', name: 'Zulu', cidr: '10.2.0.0/24' },
