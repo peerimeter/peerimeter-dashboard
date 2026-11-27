@@ -85,7 +85,7 @@ function PeerTable({ peers, peerNames, search, onOpenPeer }: {
       {peers.map((peer) => <tr key={peer.node_id} onClick={() => onOpenPeer(peer)}>
         <td><div className="peer-name"><span className="peer-avatar"><Cpu size={15} /></span><span><b>{peerNames[peer.node_id] || peer.node_id}</b><small>{shortKey(peer.public_key)}</small></span></div></td>
         <td>{peer.agent_cli_version ?? '—'}</td>
-        <td>{peer.last_active && !Number.isNaN(Date.parse(peer.last_active)) ? new Date(peer.last_active).toLocaleString() : '—'}</td>
+        <td>{peer.last_active && !Number.isNaN(Date.parse(peer.last_active)) ? new Date(peer.last_active).toISOString().slice(0, 10) : '—'}</td>
         <td><code>{peer.tunnel_address ?? '—'}</code></td>
         <td><span className="endpoint"><i />{peer.public_endpoint || peer.local_addresses?.[0] || 'No address'}</span></td>
         <td>{peer.listen_port ?? '—'}</td><td><button className="row-action" aria-label={`Edit ${peer.node_id}`}><ChevronRight size={16} /></button></td>
