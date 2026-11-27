@@ -278,15 +278,15 @@ export function useDashboardController() {
     const signedInCredentials = { ...credentials, url: credentials.url.trim() }
     const bearerClient = new ServiceAPI(signedInCredentials.url, signedInCredentials.key, 'bearer')
     try {
-      const session = await bearerClient.exchangeAPIKey(signedInCredentials.key)
+      await bearerClient.exchangeAPIKey(signedInCredentials.key)
       const client = new ServiceAPI(signedInCredentials.url, '', 'session')
-      await client.session()
+      const verifiedSession = await client.session()
       await client.verify()
       if (!isSignInCurrent()) return
       const sessionCredentials = { url: signedInCredentials.url, key: '', authMode: 'session' as const }
       sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionCredentials))
       setCredentials(sessionCredentials)
-      setUsername(session.username)
+      setUsername(verifiedSession.username)
       setServiceURLs([...new Set([...savedServiceURLs(configuredServiceURL, location.origin), ...rememberServiceURL(signedInCredentials.url)])])
       setAPI(client); await refresh(client, '', isSignInCurrent)
     } catch (cause) { if (isSignInCurrent()) setError(cause instanceof Error ? cause.message : 'Could not connect to Peerimeter Service') }
