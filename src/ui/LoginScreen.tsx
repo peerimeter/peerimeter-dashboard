@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { normalizeServiceURL } from '../api'
 import { Brand } from './Sidebar'
 
-type Credentials = { url: string; key: string; authMode?: 'password' | 'github' }
+type Credentials = { url: string; key: string; authMode?: 'password' | 'github' | 'session' }
 type AuthConfig = { password_login_enabled: boolean; github_sso_enabled: boolean }
 
 export function SessionRestoreScreen() {

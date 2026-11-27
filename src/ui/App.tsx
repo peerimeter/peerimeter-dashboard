@@ -15,7 +15,7 @@ export function App() {
     modal, peerConfig, peerConfigLoaded, peerConfigLoadFailed, joinToken,
     showJoinToken, setShowJoinToken, search, setSearch, busy, deletingPeerKeys,
     error, setError, notice, setNotice, copied, selected, peerCountLabel,
-    filteredPeers, join, refresh, signIn, signInWithGitHub, selectNetwork, openPeer, createNetwork,
+    filteredPeers, join, refresh, signIn, signInWithGitHub, selectNetwork, openPeer, createNetwork, username,
     savePeer, deletePeer, showJoin, openNetworkModal, closeModal, copy, signOut,
     peerDeletionKey,
   } = useDashboardController()
@@ -24,7 +24,7 @@ export function App() {
   if (!api) return <LoginScreen credentials={credentials} serviceURLs={serviceURLs} error={error} busy={busy} onCredentialsChange={setCredentials} onSubmit={signIn} onGitHubSignIn={signInWithGitHub} />
 
   return <div className="app-shell">
-    <Sidebar api={api} serviceVersion={serviceVersion} serviceVersionLoading={serviceVersionLoading} networks={networks} selectedID={selectedID} loading={networksLoading} failed={networksLoadFailed} onCreateNetwork={openNetworkModal} onSelectNetwork={(id) => void selectNetwork(id)} onSignOut={signOut} />
+    <Sidebar api={api} username={username} serviceVersion={serviceVersion} serviceVersionLoading={serviceVersionLoading} networks={networks} selectedID={selectedID} loading={networksLoading} failed={networksLoadFailed} onCreateNetwork={openNetworkModal} onSelectNetwork={(id) => void selectNetwork(id)} onSignOut={signOut} />
     <main className="main-panel">
       <header className="topbar">
         <div className="breadcrumbs">

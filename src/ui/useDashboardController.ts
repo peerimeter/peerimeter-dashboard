@@ -3,7 +3,7 @@ import { defaultServiceURL, joinCommands, rememberServiceURL, savedServiceURLs, 
 import type { Network, Peer, PeerConfig } from '../api'
 import { slug } from './format'
 
-type Credentials = { url: string; key: string; authMode?: 'password' | 'github' }
+type Credentials = { url: string; key: string; authMode?: 'session' | 'password' | 'github' }
 const SESSION_STORAGE_KEY = 'peerimeter.session'
 const COPY_RESET_MS = 1_800
 const SESSION_RESTORE_TIMEOUT_MS = 8_000
@@ -85,9 +85,10 @@ export function useDashboardController() {
   const [serviceURLs, setServiceURLs] = useState(() => savedServiceURLs(configuredServiceURL, location.origin))
   const [checkingSession, setCheckingSession] = useState(() => {
     const current = saved()
-    return Boolean(current.url && (current.key || current.authMode === 'github'))
+    return Boolean(current.url && (current.key || current.authMode === 'session' || current.authMode === 'github'))
   })
   const [api, setAPI] = useState<ServiceAPI | null>(null)
+  const [username, setUsername] = useState('')
   const [networks, setNetworks] = useState<Network[]>([])
   const [serviceVersion, setServiceVersion] = useState('')
   const [serviceVersionLoading, setServiceVersionLoading] = useState(false)
@@ -219,11 +220,13 @@ export function useDashboardController() {
   useEffect(() => {
     const current = saved()
     setCredentials(current)
-    if ((!current.key && current.authMode !== 'github') || !current.url) {
+    if ((!current.key && current.authMode !== 'github' && current.authMode !== 'session') || !current.url) {
       setCheckingSession(false)
       return
     }
-    const client = new ServiceAPI(current.url, current.key, current.authMode ?? 'password')
+    const client = current.authMode === 'session' || current.authMode === 'github'
+      ? new ServiceAPI(current.url, '', 'session')
+      : new ServiceAPI(current.url, current.key, 'bearer')
     let restoreActive = true
     const timeoutID = window.setTimeout(() => {
       restoreActive = false
@@ -233,11 +236,24 @@ export function useDashboardController() {
       setBusy(false)
       setCheckingSession(false)
     }, SESSION_RESTORE_TIMEOUT_MS)
-    client.verify().then(async (items) => {
+    const restore = async () => {
+      if (client.authMode === 'bearer') {
+        await client.exchangeAPIKey(current.key)
+        const sessionClient = new ServiceAPI(current.url, '', 'session')
+        const session = await sessionClient.session()
+        return { client: sessionClient, items: await sessionClient.verify(), username: session.username }
+      }
+      const session = await client.session()
+      return { client, items: await client.verify(), username: session.username }
+    }
+    restore().then(async ({ client: restoredClient, items, username: restoredUsername }) => {
       if (!restoreActive) return
-      await refresh(client, '', () => restoreActive, items)
+      await refresh(restoredClient, '', () => restoreActive, items)
       if (!restoreActive) return
-      setAPI(client)
+      setCredentials({ url: current.url, key: '', authMode: 'session' })
+      sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ url: current.url, key: '', authMode: 'session' }))
+      setUsername(restoredUsername)
+      setAPI(restoredClient)
       setCheckingSession(false)
     }).catch(() => {
       if (!restoreActive) return
@@ -260,12 +276,17 @@ export function useDashboardController() {
     setError('')
     const isSignInCurrent = beginRequest(sessionID)
     const signedInCredentials = { ...credentials, url: credentials.url.trim() }
-    const client = new ServiceAPI(signedInCredentials.url, signedInCredentials.key)
+    const bearerClient = new ServiceAPI(signedInCredentials.url, signedInCredentials.key, 'bearer')
     try {
+      const session = await bearerClient.exchangeAPIKey(signedInCredentials.key)
+      const client = new ServiceAPI(signedInCredentials.url, '', 'session')
+      await client.session()
       await client.verify()
       if (!isSignInCurrent()) return
-      sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(signedInCredentials))
-      setCredentials(signedInCredentials)
+      const sessionCredentials = { url: signedInCredentials.url, key: '', authMode: 'session' as const }
+      sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionCredentials))
+      setCredentials(sessionCredentials)
+      setUsername(session.username)
       setServiceURLs([...new Set([...savedServiceURLs(configuredServiceURL, location.origin), ...rememberServiceURL(signedInCredentials.url)])])
       setAPI(client); await refresh(client, '', isSignInCurrent)
     } catch (cause) { if (isSignInCurrent()) setError(cause instanceof Error ? cause.message : 'Could not connect to Peerimeter Service') }
@@ -275,7 +296,7 @@ export function useDashboardController() {
   function signInWithGitHub() {
     const targetURL = credentials.url.trim()
     if (!targetURL) return
-    const githubCredentials = { url: targetURL, key: '', authMode: 'github' as const }
+    const githubCredentials = { url: targetURL, key: '', authMode: 'session' as const }
     sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(githubCredentials))
     location.assign(`${targetURL.replace(/\/+$/, '')}/auth/github/login`)
   }
@@ -442,12 +463,12 @@ export function useDashboardController() {
 
   async function signOut() {
     const currentAPI = api
-    if (currentAPI?.authMode === 'github') {
+    if (currentAPI?.authMode === 'session') {
       setBusy(true)
       try {
         await currentAPI.logout()
       } catch (cause) {
-        setError(cause instanceof Error ? `Could not end GitHub session: ${cause.message}` : 'Could not end GitHub session. Please try again.')
+        setError(cause instanceof Error ? `Could not end session: ${cause.message}` : 'Could not end session. Please try again.')
         setBusy(false)
         return
       }
@@ -456,6 +477,7 @@ export function useDashboardController() {
     sessionID.current++; refreshLoadID.current++; peerLoadID.current++; peerConfigLoadID.current++; joinLoadID.current++
     sessionStorage.removeItem(SESSION_STORAGE_KEY)
     setAPI(null)
+    setUsername('')
     serviceVersionLoadID.current++
     setServiceVersion('')
     setServiceVersionLoading(false)
@@ -473,7 +495,7 @@ export function useDashboardController() {
   }
 
   return {
-    credentials, setCredentials, serviceURLs, checkingSession, api, networks,
+    credentials, setCredentials, serviceURLs, checkingSession, api, username, networks,
     serviceVersion, serviceVersionLoading, selectedID, peers, peersLoading,
     peersLoadFailed, networksLoading, networksLoadFailed, peerNames, active,
     modal, peerConfig, peerConfigLoaded, peerConfigLoadFailed, joinToken,

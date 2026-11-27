@@ -11,6 +11,7 @@ export type Peer = {
   agent_cli_version?: string
 }
 export type ServiceVersion = { version: string }
+export type AuthSession = { username: string; auth_method: 'api_key' | 'github'; expires_at?: number }
 export type PeerConfig = { version: number; name?: string; notes?: string; [key: string]: unknown }
 
 const MAX_SAVED_SERVICE_URLS = 20
@@ -65,25 +66,29 @@ export class ServiceAPI {
   readonly baseURL: string
   readonly key: string
   readonly allowInsecureHTTP: boolean
-  readonly authMode: 'password' | 'github'
+  readonly authMode: 'bearer' | 'session'
 
-  constructor(baseURL: string, key: string, authModeOrAllowInsecureHTTP: 'password' | 'github' | boolean = 'password', allowInsecureHTTP = import.meta.env.VITE_ALLOW_INSECURE_HTTP === 'true') {
+  constructor(baseURL: string, key: string, authModeOrAllowInsecureHTTP: 'bearer' | 'session' | 'password' | 'github' | boolean = 'bearer', allowInsecureHTTP = import.meta.env.VITE_ALLOW_INSECURE_HTTP === 'true') {
     this.baseURL = normalizeServiceURL(baseURL)
     this.key = key
-    this.authMode = typeof authModeOrAllowInsecureHTTP === 'boolean' ? 'password' : authModeOrAllowInsecureHTTP
+    this.authMode = typeof authModeOrAllowInsecureHTTP === 'boolean' || authModeOrAllowInsecureHTTP === 'password' ? 'bearer' : authModeOrAllowInsecureHTTP === 'github' ? 'session' : authModeOrAllowInsecureHTTP
     this.allowInsecureHTTP = typeof authModeOrAllowInsecureHTTP === 'boolean' ? authModeOrAllowInsecureHTTP : allowInsecureHTTP
   }
 
-  private async requestResponse(path: string, init: RequestInit = {}): Promise<Response> {
+  private validateURL(): void {
     const target = new URL(this.baseURL)
     if (target.protocol !== 'https:' && !(target.protocol === 'http:' && (LOOPBACK_HOSTS.has(target.hostname) || this.allowInsecureHTTP))) {
       throw new Error('Service URL must use HTTPS unless it points to a loopback address')
     }
+  }
+
+  private async requestResponse(path: string, init: RequestInit = {}): Promise<Response> {
+    this.validateURL()
     const response = await fetch(`${this.baseURL}${path}`, {
       ...init,
-      credentials: this.authMode === 'github' ? 'include' : 'same-origin',
+      credentials: this.authMode === 'session' ? 'include' : 'same-origin',
       headers: {
-        ...(this.authMode === 'password' ? { Authorization: `Bearer ${this.key}` } : {}),
+        ...(this.authMode === 'bearer' ? { Authorization: `Bearer ${this.key}` } : {}),
         ...(init.body ? { 'Content-Type': 'application/json' } : {}),
         ...init.headers,
       },
@@ -109,8 +114,22 @@ export class ServiceAPI {
   }
 
   async verify(): Promise<Network[]> { return this.networks() }
+  async exchangeAPIKey(key: string): Promise<AuthSession> {
+    this.validateURL()
+    const response = await fetch(`${this.baseURL}/api/v1/auth/login`, {
+      method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: key }),
+    })
+    if (!response.ok) {
+      let message = `${response.status} ${response.statusText}`
+      try { const body = await response.json() as { error?: string }; if (body.error) message = body.error } catch { /* Keep HTTP status. */ }
+      throw new Error(message)
+    }
+    return response.json() as Promise<AuthSession>
+  }
+  async session(): Promise<AuthSession> { return this.requestJSON<AuthSession>('/api/v1/auth/session') }
   async logout(): Promise<void> {
-    if (this.authMode === 'github') await this.requestVoid('/api/v1/auth/logout', { method: 'POST' })
+    if (this.authMode === 'session') await this.requestVoid('/api/v1/auth/logout', { method: 'POST' })
   }
   async version(): Promise<string> {
     const result = await this.requestJSON<ServiceVersion>('/api/v1/version')
