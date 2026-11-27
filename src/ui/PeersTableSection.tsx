@@ -2,10 +2,7 @@ import { ChevronRight, Cpu, Globe2, Plus, RefreshCw, Search } from 'lucide-react
 import type { Network, Peer } from '../api'
 import { shortKey } from './format'
 
-const lastActiveDateTimeFormatter = new Intl.DateTimeFormat('sv-SE', {
-  year: 'numeric', month: '2-digit', day: '2-digit',
-  hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
-})
+const lastActiveDateTimeFormatters = new Map<string, Intl.DateTimeFormat>()
 
 export function WelcomeSection({ loading, failed, onRefresh, onCreateNetwork }: {
   loading: boolean
@@ -83,7 +80,16 @@ function formatLastActive(value?: string): string {
   if (!value) return '—'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return '—'
-  return lastActiveDateTimeFormatter.format(date)
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  let formatter = lastActiveDateTimeFormatters.get(timeZone)
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat('sv-SE', {
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23', timeZone,
+    })
+    lastActiveDateTimeFormatters.set(timeZone, formatter)
+  }
+  return formatter.format(date)
 }
 
 function PeerTable({ peers, peerNames, search, onOpenPeer }: {
