@@ -170,7 +170,7 @@ describe('savedServiceURLs', () => {
     const storage = { getItem: (key: string) => data.get(key) ?? null, setItem: (key: string, value: string) => data.set(key, value) }
     expect(savedServiceURLs(' https://default.example/ ', 'https://dashboard.example', storage)).toEqual(['https://default.example'])
     rememberServiceURL('https://connected.example/', storage)
-    expect(savedServiceURLs('https://default.example', 'https://dashboard.example', storage)).toEqual(['https://default.example', 'https://connected.example'])
+    expect(savedServiceURLs('https://default.example', 'https://dashboard.example', storage)).toEqual(['https://connected.example', 'https://default.example'])
   })
 })
 

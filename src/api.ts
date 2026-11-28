@@ -50,7 +50,7 @@ export function savedServiceURLs(configured: string | undefined, origin: string,
   const target = storage ?? browserStorage()
   if (!target) return defaultURL ? [defaultURL] : []
 
-  const urls = [defaultURL, ...readStoredServiceURLs(target)]
+  const urls = [...readStoredServiceURLs(target), defaultURL]
   return [...new Set(urls.map(normalizeServiceURL).filter(Boolean))]
 }
 

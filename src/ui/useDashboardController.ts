@@ -74,9 +74,9 @@ function useDashboardModal() {
 }
 
 const saved = (): Credentials => {
-  const defaultURL = defaultServiceURL(configuredServiceURL, location.origin)
-  try { return JSON.parse(sessionStorage.getItem(SESSION_STORAGE_KEY) ?? 'null') ?? { url: defaultURL, key: '' } }
-  catch { return { url: defaultURL, key: '' } }
+  const serviceURL = savedServiceURLs(configuredServiceURL, location.origin)[0] ?? defaultServiceURL(configuredServiceURL, location.origin)
+  try { return JSON.parse(sessionStorage.getItem(SESSION_STORAGE_KEY) ?? 'null') ?? { url: serviceURL, key: '' } }
+  catch { return { url: serviceURL, key: '' } }
 }
 const peerDeletionKey = (serviceID: string, networkID: string, peerID: string) => JSON.stringify([serviceID, networkID, peerID])
 
@@ -290,7 +290,8 @@ export function useDashboardController() {
       setCredentials(sessionCredentials)
       setUsername(verifiedSession.username)
       setAuthMethod(verifiedSession.auth_method)
-      setServiceURLs([...new Set([...savedServiceURLs(configuredServiceURL, location.origin), ...rememberServiceURL(signedInCredentials.url)])])
+      rememberServiceURL(signedInCredentials.url)
+      setServiceURLs(savedServiceURLs(configuredServiceURL, location.origin))
       setAPI(client); await refresh(client, '', isSignInCurrent)
     } catch (cause) { if (isSignInCurrent()) setError(cause instanceof Error ? cause.message : 'Could not connect to Peerimeter Service') }
     finally { if (isSignInCurrent()) setBusy(false) }
