@@ -76,22 +76,40 @@ function EmptyPeerList({ onJoin }: { onJoin: () => void }) {
   return <div className="empty-state"><div className="empty-icon"><Cpu size={21} /></div><h3>No peers connected yet</h3><p>Add a peer to get its install and join commands.</p><button className="button primary" onClick={onJoin}><Plus size={15} /> Add a peer</button></div>
 }
 
-function formatLastActive(value?: string): string {
-  if (!value) return '—'
+function formatLastActive(value?: string): { label: string; dateTime?: string; title?: string } {
+  if (!value) return { label: '—' }
+
+  const date = new Date(value)
+  const timestamp = date.getTime()
+  if (!Number.isFinite(timestamp)) return { label: '—' }
+
+  const elapsedSeconds = Math.round((timestamp - Date.now()) / 1_000)
+  const elapsedMinutes = Math.round(elapsedSeconds / 60)
+  const elapsedHours = Math.round(elapsedMinutes / 60)
+  const elapsedDays = Math.round(elapsedHours / 24)
+  const relativeTime = new Intl.RelativeTimeFormat(undefined, { numeric: 'always' })
+  const label = Math.abs(elapsedSeconds) < 60
+    ? relativeTime.format(elapsedSeconds, 'second')
+    : Math.abs(elapsedMinutes) < 60
+      ? relativeTime.format(elapsedMinutes, 'minute')
+      : Math.abs(elapsedHours) < 24
+        ? relativeTime.format(elapsedHours, 'hour')
+        : relativeTime.format(elapsedDays, 'day')
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
   let formatter = lastActiveDateTimeFormatters.get(timeZone)
   if (!formatter) {
-    formatter = new Intl.DateTimeFormat('sv-SE', {
-      year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23', timeZone,
+    formatter = new Intl.DateTimeFormat(undefined, {
+      dateStyle: 'medium', timeStyle: 'medium', timeZone,
     })
     lastActiveDateTimeFormatters.set(timeZone, formatter)
   }
-  try {
-    return formatter.format(new Date(value))
-  } catch {
-    return '—'
-  }
+  return { label, dateTime: date.toISOString(), title: formatter.format(date) }
+}
+
+function LastActive({ value }: { value?: string }) {
+  const lastActive = formatLastActive(value)
+  if (!lastActive.dateTime) return lastActive.label
+  return <time dateTime={lastActive.dateTime} title={lastActive.title}>{lastActive.label}</time>
 }
 
 function PeerTable({ peers, peerNames, search, onOpenPeer }: {
@@ -105,7 +123,7 @@ function PeerTable({ peers, peerNames, search, onOpenPeer }: {
       {peers.map((peer) => <tr key={peer.node_id} onClick={() => onOpenPeer(peer)}>
         <td><div className="peer-name"><span className="peer-avatar"><Cpu size={15} /></span><span><b>{peerNames[peer.node_id] || peer.node_id}</b><small>{shortKey(peer.public_key)}</small></span></div></td>
         <td>{peer.agent_cli_version ?? '—'}</td>
-        <td>{formatLastActive(peer.last_active)}</td>
+        <td><LastActive value={peer.last_active} /></td>
         <td><code>{peer.tunnel_address ?? '—'}</code></td>
         <td><span className="endpoint"><i />{peer.public_endpoint || peer.local_addresses?.[0] || 'No address'}</span></td>
         <td>{peer.listen_port ?? '—'}</td><td><button className="row-action" aria-label={`Edit ${peer.node_id}`}><ChevronRight size={16} /></button></td>
