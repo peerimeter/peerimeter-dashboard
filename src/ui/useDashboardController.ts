@@ -290,8 +290,8 @@ export function useDashboardController() {
       setCredentials(sessionCredentials)
       setUsername(verifiedSession.username)
       setAuthMethod(verifiedSession.auth_method)
-      rememberServiceURL(signedInCredentials.url)
-      setServiceURLs(savedServiceURLs(configuredServiceURL, location.origin))
+      const rememberedURLs = rememberServiceURL(signedInCredentials.url)
+      setServiceURLs([...new Set([...rememberedURLs, ...savedServiceURLs(configuredServiceURL, location.origin)])])
       setAPI(client); await refresh(client, '', isSignInCurrent)
     } catch (cause) { if (isSignInCurrent()) setError(cause instanceof Error ? cause.message : 'Could not connect to Peerimeter Service') }
     finally { if (isSignInCurrent()) setBusy(false) }
