@@ -78,10 +78,6 @@ function EmptyPeerList({ onJoin }: { onJoin: () => void }) {
 
 function formatLastActive(value?: string): string {
   if (!value) return '—'
-  const dateParts = /^(\d{4})-(\d{2})-(\d{2})/.exec(value)
-  if (!dateParts || !isValidCalendarDate(Number(dateParts[1]), Number(dateParts[2]), Number(dateParts[3]))) return '—'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return '—'
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
   let formatter = lastActiveDateTimeFormatters.get(timeZone)
   if (!formatter) {
@@ -91,14 +87,11 @@ function formatLastActive(value?: string): string {
     })
     lastActiveDateTimeFormatters.set(timeZone, formatter)
   }
-  return formatter.format(date)
-}
-
-function isValidCalendarDate(year: number, month: number, day: number): boolean {
-  if (month < 1 || month > 12 || day < 1) return false
-  const isLeapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)
-  const daysInMonth = [31, isLeapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-  return day <= daysInMonth[month - 1]
+  try {
+    return formatter.format(new Date(value))
+  } catch {
+    return '—'
+  }
 }
 
 function PeerTable({ peers, peerNames, search, onOpenPeer }: {
