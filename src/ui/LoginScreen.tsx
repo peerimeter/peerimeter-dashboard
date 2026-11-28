@@ -9,7 +9,7 @@ type LoadedAuthConfig = { url: string; config: AuthConfig }
 const AUTH_CONFIG_TIMEOUT_MS = 10_000
 
 export function SessionRestoreScreen() {
-  return <main className="login-page"><div className="loading-line"><span className="live-dot" />Restoring your session…</div></main>
+  return <main className="login-page"><div className="loading-line"><span className="live-dot" />Loading…</div></main>
 }
 
 export function LoginScreen({ credentials, serviceURLs, error, busy, onCredentialsChange, onSubmit, onGitHubSignIn }: {
