@@ -5,6 +5,8 @@ import { Brand } from './Sidebar'
 
 type Credentials = { url: string; key: string; authMode?: 'password' | 'github' | 'session' }
 type AuthConfig = { password_login_enabled: boolean; github_sso_enabled: boolean }
+type LoadedAuthConfig = { url: string; config: AuthConfig }
+const AUTH_CONFIG_TIMEOUT_MS = 10_000
 
 export function SessionRestoreScreen() {
   return <main className="login-page"><div className="loading-line"><span className="live-dot" />Restoring your session…</div></main>
@@ -19,24 +21,31 @@ export function LoginScreen({ credentials, serviceURLs, error, busy, onCredentia
   onSubmit: React.FormEventHandler<HTMLFormElement>
   onGitHubSignIn: () => void
 }) {
-  const [authConfig, setAuthConfig] = useState<AuthConfig | null>(null)
+  const [loadedAuthConfig, setLoadedAuthConfig] = useState<LoadedAuthConfig | null>(null)
   const normalizedURL = normalizeServiceURL(credentials.url)
+  const authConfig = loadedAuthConfig?.url === normalizedURL ? loadedAuthConfig.config : null
   const selectedURL = serviceURLs.includes(normalizedURL) ? normalizedURL : '__custom'
 
   useEffect(() => {
     let active = true
     const serviceURL = normalizeServiceURL(credentials.url)
     if (!serviceURL) {
-      setAuthConfig({ password_login_enabled: true, github_sso_enabled: false })
+      setLoadedAuthConfig({ url: normalizedURL, config: { password_login_enabled: true, github_sso_enabled: false } })
       return
     }
-    fetch(`${serviceURL}/api/v1/auth/config`).then(async (response) => {
+    const controller = new AbortController()
+    const timeoutID = window.setTimeout(() => controller.abort(), AUTH_CONFIG_TIMEOUT_MS)
+    fetch(`${serviceURL}/api/v1/auth/config`, { signal: controller.signal }).then(async (response) => {
       if (!response.ok) throw new Error('auth config unavailable')
       return response.json() as Promise<AuthConfig>
-    }).then((config) => { if (active) setAuthConfig(config) }).catch(() => {
-      if (active) setAuthConfig({ password_login_enabled: true, github_sso_enabled: false })
-    })
-    return () => { active = false }
+    }).then((config) => { if (active) setLoadedAuthConfig({ url: normalizedURL, config }) }).catch(() => {
+      if (active) setLoadedAuthConfig({ url: normalizedURL, config: { password_login_enabled: true, github_sso_enabled: false } })
+    }).finally(() => window.clearTimeout(timeoutID))
+    return () => {
+      active = false
+      controller.abort()
+      window.clearTimeout(timeoutID)
+    }
   }, [normalizedURL])
 
   return <main className="login-page">
