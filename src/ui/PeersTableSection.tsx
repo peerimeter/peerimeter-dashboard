@@ -95,10 +95,9 @@ function formatLastActive(value?: string): string {
 }
 
 function isValidCalendarDate(year: number, month: number, day: number): boolean {
-  if (month < 1 || month > 12 || day < 1) return false
-  const isLeapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)
-  const daysInMonth = [31, isLeapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-  return day <= daysInMonth[month - 1]
+  const date = new Date(0)
+  date.setUTCFullYear(year, month - 1, day)
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
 }
 
 function PeerTable({ peers, peerNames, search, onOpenPeer }: {
